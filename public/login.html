@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>管理员登录｜真心话大冒险转盘</title>
+  <link rel="stylesheet" href="/style.css" />
+  <style>
+    .login-wrap {
+      min-height: calc(100vh - 60px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 40px 20px;
+      position: relative;
+      z-index: 1;
+    }
+    .login-card {
+      width: 100%;
+      max-width: 420px;
+      padding: 36px 32px 30px;
+      border-radius: 22px;
+      background: linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.04));
+      border: 1px solid var(--glass2);
+      box-shadow:
+        0 30px 80px rgba(0,0,0,.45),
+        0 0 0 1px rgba(255,255,255,.04) inset,
+        0 0 60px rgba(49,247,255,.08) inset;
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+    }
+    .login-logo {
+      width: 64px;
+      height: 64px;
+      margin: 0 auto 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 18px;
+      font-weight: 800;
+      font-size: 22px;
+      letter-spacing: 1px;
+      background: linear-gradient(135deg, var(--cyan), var(--pink));
+      color: #0a0a1f;
+      box-shadow: 0 12px 30px rgba(255,60,240,.35), 0 6px 18px rgba(49,247,255,.35);
+    }
+    .login-title {
+      margin: 0 0 6px;
+      text-align: center;
+      font-size: 22px;
+      letter-spacing: 1px;
+    }
+    .login-sub {
+      text-align: center;
+      color: var(--muted);
+      font-size: 13px;
+      margin: 0 0 26px;
+    }
+    .login-field {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-bottom: 18px;
+    }
+    .login-field label {
+      font-size: 13px;
+      color: var(--muted);
+      letter-spacing: .4px;
+    }
+    .login-input-wrap {
+      position: relative;
+    }
+    .login-input-wrap input {
+      width: 100%;
+      padding: 14px 46px 14px 16px;
+      border-radius: 12px;
+      border: 1px solid var(--glass2);
+      background: rgba(0,0,0,.28);
+      color: var(--text);
+      font-size: 16px;
+      letter-spacing: 1px;
+      outline: none;
+      transition: border-color .15s, box-shadow .15s;
+    }
+    .login-input-wrap input:focus {
+      border-color: var(--cyan);
+      box-shadow: 0 0 0 3px rgba(49,247,255,.15);
+    }
+    .login-toggle {
+      position: absolute;
+      right: 6px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: transparent;
+      border: 0;
+      color: var(--muted);
+      cursor: pointer;
+      padding: 8px 10px;
+      font-size: 13px;
+      border-radius: 8px;
+    }
+    .login-toggle:hover { color: var(--cyan); background: rgba(255,255,255,.05); }
+    .login-submit {
+      width: 100%;
+      padding: 14px 18px;
+      font-size: 16px;
+      letter-spacing: 1px;
+      border: 0;
+      border-radius: 12px;
+      cursor: pointer;
+      color: #0a0a1f;
+      font-weight: 700;
+      background: linear-gradient(135deg, var(--cyan), var(--pink));
+      box-shadow: 0 12px 30px rgba(255,60,240,.30), 0 6px 18px rgba(49,247,255,.30);
+      transition: transform .12s, filter .15s, opacity .15s;
+    }
+    .login-submit:hover { filter: brightness(1.05); }
+    .login-submit:active { transform: translateY(1px); }
+    .login-submit[disabled] { opacity: .6; cursor: not-allowed; }
+    .login-error {
+      margin-top: 14px;
+      min-height: 20px;
+      text-align: center;
+      font-size: 13px;
+      color: var(--danger);
+      letter-spacing: .3px;
+    }
+    .login-back {
+      display: block;
+      text-align: center;
+      margin-top: 18px;
+      color: var(--muted);
+      font-size: 13px;
+      text-decoration: none;
+      letter-spacing: .4px;
+    }
+    .login-back:hover { color: var(--cyan); }
+  </style>
+</head>
+<body>
+  <main class="login-wrap">
+    <section class="login-card" aria-labelledby="loginTitle">
+      <div class="login-logo">GO</div>
+      <h1 id="loginTitle" class="login-title">管理员登录</h1>
+      <p class="login-sub">输入密码后进入导入控制台</p>
+
+      <form id="loginForm" autocomplete="off" novalidate>
+        <div class="login-field">
+          <label for="password">管理密码</label>
+          <div class="login-input-wrap">
+            <input id="password" name="password" type="password" placeholder="请输入管理员密码" autofocus required />
+            <button type="button" class="login-toggle" id="togglePwd" aria-label="切换密码可见">显示</button>
+          </div>
+        </div>
+        <button type="submit" class="login-submit" id="submitBtn">进入控制台</button>
+        <div class="login-error" id="loginError" role="alert" aria-live="polite"></div>
+      </form>
+
+      <a class="login-back" href="/">← 返回大转盘</a>
+    </section>
+  </main>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="/common.js"></script>
+  <script>
+    (async function () {
+      // 已登录则直接跳到控制台
+      try {
+        const r = await fetch('/api/admin/check', { cache: 'no-store' });
+        const j = await r.json();
+        if (j && j.authenticated) {
+          location.replace('/admin.html');
+          return;
+        }
+      } catch (_) {}
+
+      const form = document.getElementById('loginForm');
+      const input = document.getElementById('password');
+      const submitBtn = document.getElementById('submitBtn');
+      const errBox = document.getElementById('loginError');
+      const toggle = document.getElementById('togglePwd');
+
+      toggle.addEventListener('click', () => {
+        const isPwd = input.type === 'password';
+        input.type = isPwd ? 'text' : 'password';
+        toggle.textContent = isPwd ? '隐藏' : '显示';
+        input.focus();
+      });
+
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const password = input.value;
+        if (!password) {
+          errBox.textContent = '请输入密码';
+          input.focus();
+          return;
+        }
+        errBox.textContent = '';
+        submitBtn.disabled = true;
+        const original = submitBtn.textContent;
+        submitBtn.textContent = '登录中…';
+        try {
+          const res = await fetch('/api/admin/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify({ password })
+          });
+          const json = await res.json().catch(() => ({}));
+          if (res.ok && json.ok) {
+            location.replace('/admin.html');
+            return;
+          }
+          errBox.textContent = json.message || '登录失败';
+          input.select();
+        } catch (err) {
+          errBox.textContent = err.message || '网络错误';
+        } finally {
+          submitBtn.disabled = false;
+          submitBtn.textContent = original;
+        }
+      });
+
+      // 粒子背景(沿用 common.js)
+      if (typeof makeParticles === 'function') makeParticles();
+    })();
+  </script>
+</body>
+</html>

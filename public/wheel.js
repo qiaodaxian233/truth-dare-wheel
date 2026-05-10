@@ -1,0 +1,735 @@
+const state = {
+  mode: 'main',
+  angle: 0,
+  spinning: false,
+  dataHash: '',
+  cacheKey: '',
+  cacheImage: null,
+  soundEnabled: localStorage.getItem('wheelSoundEnabled') !== '0',
+  sound: {
+    ctx: null,
+    master: null,
+    tickTimer: null,
+    spinStartedAt: 0,
+    spinDuration: 0
+  },
+  data: {
+    main: [
+      { label: '真心话', route: 'truth', icon: '💬', weight: 1 },
+      { label: '大冒险', route: 'dare', icon: '⚡', weight: 1 }
+    ],
+    truth: [],
+    dare: [],
+    settings: { autoSpinNext: false, pageTitle: '真心话 · 大冒险', peopleCount: 3 },
+    broadcast: { id: 0, text: '', createdAt: 0 }
+  },
+  lastBroadcastId: -1
+};
+
+const canvas = document.getElementById('wheel');
+const ctx = canvas.getContext('2d', { alpha: true });
+const spinBtn = document.getElementById('spinBtn');
+const sideSpinBtn = document.getElementById('sideSpinBtn');
+const soundToggle = document.getElementById('soundToggle');
+const resultLine = document.getElementById('resultLine');
+const resultTip = document.getElementById('resultTip');
+const modeName = document.getElementById('modeName');
+const autoSpinNext = document.getElementById('autoSpinNext');
+const resultModal = document.getElementById('resultModal');
+const modalKicker = document.getElementById('modalKicker');
+const modalTitle = document.getElementById('modalTitle');
+const modalText = document.getElementById('modalText');
+const modalAgain = document.getElementById('modalAgain');
+const modalBack = document.getElementById('modalBack');
+const closeModal = document.getElementById('closeModal');
+const peopleCountInput = document.getElementById('peopleCount');
+const peopleMinus = document.getElementById('peopleMinus');
+const peoplePlus = document.getElementById('peoplePlus');
+const pickerGo = document.getElementById('pickerGo');
+const pickerResult = document.getElementById('pickerResult');
+
+const palette = [
+  ['#31f7ff', '#0ea5e9'], ['#ff3cf0', '#a855f7'], ['#ffd166', '#fb923c'],
+  ['#34d399', '#10b981'], ['#f472b6', '#e11d48'], ['#a78bfa', '#6366f1'],
+  ['#facc15', '#f97316'], ['#22d3ee', '#2563eb'], ['#fb7185', '#be123c'],
+  ['#c084fc', '#7c3aed']
+];
+
+async function loadServerData(silent = false) {
+  if (state.spinning && silent) return;
+  try {
+    const data = await apiGetData();
+    const normalized = {
+      main: data.main && data.main.length ? data.main : state.data.main,
+      truth: normalizeList(data.truth),
+      dare: normalizeList(data.dare),
+      settings: data.settings || state.data.settings,
+      broadcast: data.broadcast || { id: 0, text: '', createdAt: 0 }
+    };
+    const nextHash = dataSignature(normalized);
+    const changed = nextHash !== state.dataHash;
+
+    state.data = normalized;
+    state.dataHash = nextHash;
+    autoSpinNext.checked = !!state.data.settings.autoSpinNext;
+
+    // 检查 GM 飘屏:第一次加载时把当前 id 设为基准,避免历史消息重复弹出
+    const bId = Number(state.data.broadcast?.id) || 0;
+    if (state.lastBroadcastId === -1) {
+      state.lastBroadcastId = bId;
+    } else if (bId > state.lastBroadcastId) {
+      state.lastBroadcastId = bId;
+      const text = String(state.data.broadcast.text || '').trim();
+      if (text) showGMBroadcast(text);
+    }
+
+    // 同步人数显示(只在用户没正在编辑时刷新,避免输入时跳数字)
+    const serverCount = Number(state.data.settings.peopleCount);
+    if (Number.isFinite(serverCount) && serverCount >= 1 && document.activeElement !== peopleCountInput) {
+      peopleCountInput.value = serverCount;
+    }
+
+    if (state.data.settings.pageTitle) {
+      document.getElementById('pageTitle').textContent = state.data.settings.pageTitle;
+      document.title = state.data.settings.pageTitle + '|炫酷转盘';
+    }
+
+    if (changed) invalidateWheelCache();
+    resizeCanvasIfNeeded();
+    drawWheel();
+    if (!silent) showToast(changed ? '转盘数据已同步' : '数据没有变化');
+  } catch (err) {
+    if (!silent) showToast(err.message || '读取数据失败');
+    resizeCanvasIfNeeded();
+    drawWheel();
+  }
+}
+
+function dataSignature(data) {
+  return JSON.stringify({
+    main: (data.main || []).map(m => ({ l: labelOf(m), w: itemWeight(m) })),
+    truth: (data.truth || []).map(t => ({ t: itemText(t), w: itemWeight(t) })),
+    dare: (data.dare || []).map(t => ({ t: itemText(t), w: itemWeight(t) })),
+    settings: data.settings || {}
+  });
+}
+
+function getSegments() {
+  const list = state.data[state.mode] || [];
+  return list.length ? list : ['暂无数据,请到导入控制台添加'];
+}
+function labelOf(item) {
+  if (typeof item === 'string') return item;
+  if (item && typeof item === 'object') return item.label || item.text || '';
+  return String(item || '');
+}
+
+// 按权重抽一个索引
+function pickWeightedIndex(segments) {
+  const weights = segments.map(itemWeight);
+  const total = weights.reduce((a, b) => a + b, 0);
+  if (total <= 0) return Math.floor(Math.random() * segments.length);
+  let r = Math.random() * total;
+  for (let i = 0; i < weights.length; i++) {
+    r -= weights[i];
+    if (r < 0) return i;
+  }
+  return segments.length - 1;
+}
+
+// 计算每个扇区的角度(按权重),返回 [{start, end, mid, weight}]
+function computeArcs(segments) {
+  const weights = segments.map(itemWeight);
+  const total = weights.reduce((a, b) => a + b, 0) || segments.length;
+  const arcs = [];
+  let acc = 0;
+  for (let i = 0; i < segments.length; i++) {
+    const portion = (weights[i] / total) * Math.PI * 2;
+    arcs.push({ start: acc, end: acc + portion, mid: acc + portion / 2, weight: weights[i] });
+    acc += portion;
+  }
+  return arcs;
+}
+
+function invalidateWheelCache() {
+  state.cacheKey = '';
+  state.cacheImage = null;
+}
+
+function resizeCanvasIfNeeded() {
+  const rect = canvas.getBoundingClientRect();
+  const cssSize = Math.max(280, Math.round(rect.width || 700));
+  const isSmall = window.innerWidth <= 560;
+  // DPR 太高在小屏会卡,这里给上限
+  const dpr = Math.min(window.devicePixelRatio || 1, isSmall ? 1.25 : 1.6);
+  // 内部分辨率 = CSS 尺寸 × dpr,允许 320~1400 之间
+  const nextSize = Math.max(320, Math.min(1400, Math.round(cssSize * dpr)));
+
+  if (canvas.width !== nextSize || canvas.height !== nextSize) {
+    canvas.width = nextSize;
+    canvas.height = nextSize;
+    invalidateWheelCache();
+  }
+}
+
+function drawWheel() {
+  const W = canvas.width;
+  const H = canvas.height;
+  const cx = W / 2;
+  const cy = H / 2;
+  const wheelImage = getCachedWheelImage();
+
+  ctx.clearRect(0, 0, W, H);
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(state.angle);
+  ctx.drawImage(wheelImage, -W / 2, -H / 2, W, H);
+  ctx.restore();
+}
+
+function getCachedWheelImage() {
+  const segments = getSegments();
+  const key = `${state.mode}|${canvas.width}|${state.dataHash}|${segments.length}`;
+  if (state.cacheImage && state.cacheKey === key) return state.cacheImage;
+
+  const W = canvas.width;
+  const H = canvas.height;
+  const off = document.createElement('canvas');
+  off.width = W;
+  off.height = H;
+  const c = off.getContext('2d', { alpha: true });
+  renderWheelBase(c, W, H, segments);
+
+  state.cacheKey = key;
+  state.cacheImage = off;
+  return off;
+}
+
+function renderWheelBase(c, W, H, segments) {
+  const cx = W / 2;
+  const cy = H / 2;
+  const r = W * 0.43;
+  const count = Math.max(1, segments.length);
+  const arcs = computeArcs(segments);
+  const largeList = count > 24;
+  const hugeList = count > 72;
+
+  c.clearRect(0, 0, W, H);
+  c.save();
+  c.translate(cx, cy);
+
+  for (let i = 0; i < count; i++) {
+    const { start, end, mid } = arcs[i] || { start: 0, end: Math.PI * 2, mid: Math.PI };
+    const arcSize = end - start;
+    const colors = palette[i % palette.length];
+    const grad = c.createRadialGradient(0, 0, r * .1, 0, 0, r);
+    grad.addColorStop(0, brighten(colors[0], 24));
+    grad.addColorStop(.72, colors[0]);
+    grad.addColorStop(1, colors[1]);
+
+    c.beginPath();
+    c.moveTo(0, 0);
+    c.arc(0, 0, r, start, end);
+    c.closePath();
+    c.fillStyle = grad;
+    c.fill();
+    c.strokeStyle = largeList ? 'rgba(255,255,255,.26)' : 'rgba(255,255,255,.62)';
+    c.lineWidth = hugeList ? .7 : largeList ? 1.1 : 3;
+    c.stroke();
+
+    if (!hugeList) {
+      c.save();
+      c.rotate(mid);
+      // 当 mid 让 X 轴方向"朝下、朝左、朝左上"时翻转,确保字头始终朝外
+      // canvas 顺时针旋转:mid ∈ [π/2, 3π/2) 时翻转
+      // 包含下边界 π/2 让 1:1 平分时下方扇区字正立;不含上边界让上方扇区字也正立
+      const flipped = mid >= Math.PI / 2 && mid < Math.PI * 1.5;
+      if (flipped) {
+        c.rotate(Math.PI);
+        c.textAlign = 'left';
+      } else {
+        c.textAlign = 'right';
+      }
+      c.textBaseline = 'middle';
+      if (largeList) drawIndexInSlice(c, i + 1, r, count, flipped);
+      else drawTextInSlice(c, labelOf(segments[i]), r, count, arcSize, flipped);
+      c.restore();
+    }
+  }
+
+  if (hugeList) {
+    c.save();
+    c.textAlign = 'center';
+    c.textBaseline = 'middle';
+    c.font = `900 ${Math.max(18, W * .028)}px system-ui`;
+    c.fillStyle = 'rgba(255,255,255,.88)';
+    c.shadowColor = 'rgba(0,0,0,.45)';
+    c.shadowBlur = 8;
+    c.fillText(`${count} 条题目`, 0, -r * .30);
+    c.font = `700 ${Math.max(13, W * .018)}px system-ui`;
+    c.fillText('完整结果会在弹窗显示', 0, -r * .22);
+    c.restore();
+  }
+
+  c.beginPath();
+  c.arc(0, 0, r * .18, 0, Math.PI * 2);
+  c.fillStyle = 'rgba(255,255,255,.18)';
+  c.fill();
+  c.lineWidth = Math.max(3, W * .006);
+  c.strokeStyle = 'rgba(255,255,255,.58)';
+  c.stroke();
+
+  c.beginPath();
+  c.arc(0, 0, r + 8, 0, Math.PI * 2);
+  c.strokeStyle = 'rgba(255,255,255,.35)';
+  c.lineWidth = Math.max(6, W * .011);
+  c.stroke();
+
+  c.beginPath();
+  c.arc(0, 0, r + 22, 0, Math.PI * 2);
+  c.strokeStyle = 'rgba(49,247,255,.25)';
+  c.lineWidth = Math.max(1, W * .002);
+  c.stroke();
+
+  c.restore();
+}
+
+function drawIndexInSlice(c, number, r, count, flipped) {
+  const size = count > 50 ? 13 : count > 36 ? 15 : 18;
+  c.font = `900 ${size}px system-ui`;
+  c.shadowColor = 'rgba(0,0,0,.35)';
+  c.shadowBlur = 5;
+  c.fillStyle = 'rgba(255,255,255,.94)';
+  // 翻转后坐标系反向,文字位置取负值
+  const x = flipped ? -r * .86 : r * .86;
+  c.fillText(`#${number}`, x, 0);
+  c.shadowBlur = 0;
+}
+
+function drawTextInSlice(c, text, r, count, arcSize, flipped) {
+  // 默认按 count 估算扇区角度
+  const baseArc = arcSize || (Math.PI * 2 / Math.max(1, count));
+  const arcDeg = (baseArc * 180) / Math.PI;
+  // 字号根据扇区角度 + 半径自适应:大扇区可以大,小扇区要变小避免溢出
+  // 字号 = r × 系数,这样手机/桌面都按比例缩放
+  let factor, lineFactor, maxChars;
+  if (arcDeg >= 120) { factor = 0.16; lineFactor = 0.18; maxChars = 8; }
+  else if (arcDeg >= 60) { factor = 0.12; lineFactor = 0.13; maxChars = 9; }
+  else if (arcDeg >= 30) { factor = 0.08; lineFactor = 0.09; maxChars = 9; }
+  else if (arcDeg >= 18) { factor = 0.065; lineFactor = 0.075; maxChars = 8; }
+  else if (arcDeg >= 12) { factor = 0.052; lineFactor = 0.062; maxChars = 7; }
+  else { factor = 0.045; lineFactor = 0.055; maxChars = 6; }
+  const fontSize = Math.max(11, r * factor);
+  const lineHeight = Math.max(13, r * lineFactor);
+  const maxLines = arcDeg >= 60 ? 3 : 2;
+  const clean = String(text || '').replace(/\s+/g, ' ').trim();
+  const lines = wrapByChars(clean, maxChars).slice(0, maxLines);
+  // 翻转后文字外缘在 x 负向
+  const x = flipped ? -r * .82 : r * .82;
+  const y0 = -((lines.length - 1) * lineHeight) / 2;
+  c.shadowColor = 'rgba(0,0,0,.30)';
+  c.shadowBlur = 4;
+  c.font = `900 ${fontSize}px system-ui`;
+  c.fillStyle = '#fff';
+  lines.forEach((line, idx) => c.fillText(line, x, y0 + idx * lineHeight));
+  c.shadowBlur = 0;
+}
+
+function wrapByChars(text, size) {
+  if (text.length <= size) return [text];
+  const arr = [];
+  for (let i = 0; i < text.length; i += size) arr.push(text.slice(i, i + size));
+  if (arr.length > 2 && arr[1]) arr[1] = arr[1].slice(0, Math.max(0, size - 1)) + '…';
+  return arr;
+}
+
+function brighten(hex, amount) {
+  const num = parseInt(hex.replace('#', ''), 16);
+  const r = Math.min(255, (num >> 16) + amount);
+  const g = Math.min(255, ((num >> 8) & 255) + amount);
+  const b = Math.min(255, (num & 255) + amount);
+  return '#' + (b | (g << 8) | (r << 16)).toString(16).padStart(6, '0');
+}
+
+function updateSoundToggle() {
+  if (!soundToggle) return;
+  soundToggle.textContent = state.soundEnabled ? '🔊 转轮音效:开' : '🔇 转轮音效:关';
+  soundToggle.classList.toggle('active', state.soundEnabled);
+}
+
+function toggleSound() {
+  state.soundEnabled = !state.soundEnabled;
+  localStorage.setItem('wheelSoundEnabled', state.soundEnabled ? '1' : '0');
+  updateSoundToggle();
+  if (state.soundEnabled) {
+    ensureAudio();
+    playTone(720, 0.035, 0.08, 'sine');
+    setTimeout(() => playTone(920, 0.035, 0.07, 'sine'), 70);
+    showToast('转轮音效已开启');
+  } else {
+    stopSpinSound(false);
+    showToast('转轮音效已关闭');
+  }
+}
+function ensureAudio() {
+  if (!state.soundEnabled) return null;
+  const AudioCtx = window.AudioContext || window.webkitAudioContext;
+  if (!AudioCtx) return null;
+  if (!state.sound.ctx) {
+    const ctx = new AudioCtx();
+    const master = ctx.createGain();
+    master.gain.value = 0.28;
+    master.connect(ctx.destination);
+    state.sound.ctx = ctx;
+    state.sound.master = master;
+  }
+  if (state.sound.ctx.state === 'suspended') state.sound.ctx.resume();
+  return state.sound.ctx;
+}
+
+function playTone(freq = 620, duration = 0.045, volume = 0.12, type = 'triangle', delay = 0) {
+  if (!state.soundEnabled) return;
+  const ctx = ensureAudio();
+  if (!ctx || !state.sound.master) return;
+  const t = ctx.currentTime + delay;
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = type;
+  osc.frequency.setValueAtTime(freq, t);
+  gain.gain.setValueAtTime(0.0001, t);
+  gain.gain.exponentialRampToValueAtTime(Math.max(0.0001, volume), t + 0.008);
+  gain.gain.exponentialRampToValueAtTime(0.0001, t + duration);
+  osc.connect(gain);
+  gain.connect(state.sound.master);
+  osc.start(t);
+  osc.stop(t + duration + 0.02);
+}
+
+function startSpinSound(duration) {
+  if (!state.soundEnabled) return;
+  ensureAudio();
+  stopSpinSound(false);
+  state.sound.spinStartedAt = performance.now();
+  state.sound.spinDuration = duration;
+
+  const tickLoop = () => {
+    if (!state.spinning || !state.soundEnabled) return;
+    const elapsed = performance.now() - state.sound.spinStartedAt;
+    const progress = Math.min(1, elapsed / Math.max(1, state.sound.spinDuration));
+    const pitch = 980 - progress * 420 + Math.random() * 35;
+    const volume = 0.10 - progress * 0.035;
+    playTone(pitch, 0.026, Math.max(0.035, volume), 'square');
+    const nextDelay = 30 + progress * 115;
+    state.sound.tickTimer = setTimeout(tickLoop, nextDelay);
+  };
+
+  tickLoop();
+}
+
+function stopSpinSound(playWin = true) {
+  if (state.sound.tickTimer) {
+    clearTimeout(state.sound.tickTimer);
+    state.sound.tickTimer = null;
+  }
+  if (playWin && state.soundEnabled) playFinishSound();
+}
+
+function playFinishSound() {
+  if (!state.soundEnabled) return;
+  ensureAudio();
+  playTone(523.25, 0.09, 0.13, 'sine', 0);
+  playTone(659.25, 0.10, 0.13, 'sine', 0.09);
+  playTone(783.99, 0.16, 0.15, 'triangle', 0.19);
+}
+
+function spin() {
+  if (state.spinning) return;
+  closeResultModal(false);
+  const segments = getSegments();
+  if (!segments.length || String(labelOf(segments[0])).startsWith('暂无数据')) {
+    showToast('这个转盘还没有数据,请到导入控制台添加。');
+    return;
+  }
+
+  state.spinning = true;
+  spinBtn.disabled = true;
+  sideSpinBtn.disabled = true;
+  resultLine.textContent = '转盘启动中…';
+  resultTip.textContent = '题目很多时,转盘显示编号;完整题目会全屏弹出';
+
+  const arcs = computeArcs(segments);
+  const selectedIndex = pickWeightedIndex(segments);
+  const center = arcs[selectedIndex].mid;
+  const current = normalizeAngle(state.angle);
+  let target = -Math.PI / 2 - center;
+  target = normalizeAngle(target);
+  let delta = target - current;
+  if (delta < 0) delta += Math.PI * 2;
+
+  const extraTurns = (state.mode === 'main' ? 6 : 5) * Math.PI * 2 + Math.floor(Math.random() * 3) * Math.PI * 2;
+  const startAngle = state.angle;
+  const endAngle = state.angle + delta + extraTurns;
+  const duration = state.mode === 'main' ? 3600 + Math.random() * 450 : 3900 + Math.random() * 520;
+  const startTime = performance.now();
+  startSpinSound(duration);
+
+  function animate(now) {
+    const t = Math.min(1, (now - startTime) / duration);
+    const eased = easeOutQuart(t);
+    state.angle = startAngle + (endAngle - startAngle) * eased;
+    drawWheel();
+    if (t < 1) requestAnimationFrame(animate);
+    else {
+      state.angle = normalizeAngle(endAngle);
+      drawWheel();
+      finishSpin(segments[selectedIndex], selectedIndex);
+    }
+  }
+  requestAnimationFrame(animate);
+}
+
+function finishSpin(selected, selectedIndex) {
+  state.spinning = false;
+  spinBtn.disabled = false;
+  sideSpinBtn.disabled = false;
+  stopSpinSound(true);
+  burstConfetti();
+
+  if (state.mode === 'main') {
+    const route = selected.route;
+    resultLine.textContent = `抽中:${selected.icon || ''} ${selected.label}`;
+    resultTip.textContent = `正在进入【${selected.label}】大转盘…`;
+    showToast(`抽中 ${selected.label},即将跳转到对应大转盘`);
+    setTimeout(() => {
+      setMode(route);
+      if (autoSpinNext.checked) setTimeout(spin, 420);
+    }, 900);
+  } else {
+    const text = labelOf(selected);
+    const isTruth = state.mode === 'truth';
+    resultLine.textContent = isTruth ? '💬 真心话题目' : '⚡ 大冒险任务';
+    resultTip.textContent = `已抽中第 ${selectedIndex + 1} 条,完整内容已弹出`;
+    showResultModal({
+      kicker: isTruth ? '💬 真心话' : '⚡ 大冒险',
+      title: `第 ${selectedIndex + 1} 条`,
+      text
+    });
+  }
+}
+
+function showResultModal({ kicker, title, text }) {
+  modalKicker.textContent = kicker;
+  modalTitle.textContent = title;
+  modalText.textContent = text;
+  resultModal.classList.add('show');
+  resultModal.setAttribute('aria-hidden', 'false');
+  document.body.classList.add('modal-open');
+  setTimeout(() => modalAgain.focus(), 80);
+}
+
+function closeResultModal(updateAttr = true) {
+  if (!resultModal) return;
+  resultModal.classList.remove('show');
+  document.body.classList.remove('modal-open');
+  if (updateAttr) resultModal.setAttribute('aria-hidden', 'true');
+}
+
+function normalizeAngle(angle) {
+  const two = Math.PI * 2;
+  return ((angle % two) + two) % two;
+}
+function easeOutQuart(t) { return 1 - Math.pow(1 - t, 4); }
+
+function setMode(mode) {
+  if (!['main', 'truth', 'dare'].includes(mode) || state.spinning) return;
+  closeResultModal(false);
+  state.mode = mode;
+  state.angle = 0;
+  invalidateWheelCache();
+  const names = { main: '主转盘', truth: '真心话转盘', dare: '大冒险转盘' };
+  modeName.textContent = names[mode];
+  document.querySelectorAll('[data-mode]').forEach(btn => btn.classList.toggle('active', btn.dataset.mode === mode));
+  resultLine.textContent = mode === 'main' ? '点击 START 开始' : `已进入:${names[mode]}`;
+  resultTip.textContent = mode === 'main'
+    ? '主转盘会决定进入"真心话"还是"大冒险"'
+    : '点击 START 抽取当前大转盘内容;完整题目会全屏弹窗显示';
+  resizeCanvasIfNeeded();
+  drawWheel();
+}
+
+async function saveSettings() {
+  try {
+    state.data.settings = { ...(state.data.settings || {}), autoSpinNext: autoSpinNext.checked };
+    await apiSaveData(state.data);
+    showToast('设置已保存');
+  } catch (err) {
+    showToast(err.message || '保存设置失败');
+  }
+}
+
+// === 随机点名 ===
+let pickerSaveTimer = null;
+function getPeopleCount() {
+  const n = Math.floor(Number(peopleCountInput.value));
+  return Math.max(1, Math.min(50, Number.isFinite(n) ? n : 3));
+}
+
+function setPeopleCount(n) {
+  const v = Math.max(1, Math.min(50, Math.floor(Number(n) || 1)));
+  peopleCountInput.value = v;
+  schedulePeopleSave();
+}
+
+// 改了人数后延迟 600ms 同步到服务器,避免连点 +/- 时频繁请求
+function schedulePeopleSave() {
+  clearTimeout(pickerSaveTimer);
+  pickerSaveTimer = setTimeout(async () => {
+    try {
+      const n = getPeopleCount();
+      state.data.settings = { ...(state.data.settings || {}), peopleCount: n };
+      await apiSaveData(state.data);
+    } catch (err) {
+      // 静默失败,人数仍然可用
+    }
+  }, 600);
+}
+
+function pickRandomPerson() {
+  const n = getPeopleCount();
+  if (n < 1) return;
+  // 简单的"滚动停下"动画:700ms 内快速换 #数字,然后定格
+  pickerResult.classList.add('picking');
+  const start = performance.now();
+  const duration = 700;
+  const final = Math.floor(Math.random() * n) + 1;
+  let lastShown = -1;
+  function tick(now) {
+    const t = Math.min(1, (now - start) / duration);
+    if (t < 1) {
+      // 越接近结束,跳变频率越低
+      const interval = 40 + t * 80;
+      const elapsed = now - start;
+      const slot = Math.floor(elapsed / interval);
+      if (slot !== lastShown) {
+        lastShown = slot;
+        const fake = Math.floor(Math.random() * n) + 1;
+        pickerResult.innerHTML = `<span class="picker-num">#${fake}</span>`;
+      }
+      requestAnimationFrame(tick);
+    } else {
+      pickerResult.classList.remove('picking');
+      pickerResult.classList.add('done');
+      pickerResult.innerHTML = `<span class="picker-num final">#${final}</span><span class="picker-tip">由 #${final} 来回答</span>`;
+      // 闪一下后移除 done 类
+      setTimeout(() => pickerResult.classList.remove('done'), 1400);
+      // 轻轻提示音
+      if (state.soundEnabled) {
+        ensureAudio();
+        playTone(660, 0.08, 0.13, 'sine', 0);
+        playTone(880, 0.10, 0.13, 'sine', 0.08);
+      }
+    }
+  }
+  requestAnimationFrame(tick);
+}
+
+function burstConfetti() {
+  const colors = ['#31f7ff', '#ff3cf0', '#ffd166', '#34d399', '#a78bfa', '#fb7185'];
+  const count = window.innerWidth <= 560 ? 30 : 46;
+  for (let i = 0; i < count; i++) {
+    const el = document.createElement('div');
+    el.className = 'confetti';
+    el.style.left = Math.random() * 100 + 'vw';
+    el.style.background = colors[i % colors.length];
+    el.style.setProperty('--x', (Math.random() * 220 - 110) + 'px');
+    el.style.animationDelay = Math.random() * .16 + 's';
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), 1900);
+  }
+}
+
+// === GM 飘屏:全屏显示 3 秒后自动消失 ===
+let gmBroadcastTimer = null;
+function showGMBroadcast(text) {
+  const el = document.getElementById('gmBroadcast');
+  const textEl = document.getElementById('gmBroadcastText');
+  if (!el || !textEl) return;
+
+  // 重置:正在显示则强制收起,再触发新一次,这样动画能正常重播
+  el.classList.remove('show');
+  // 强制重排,让 CSS 动画能重新触发
+  void el.offsetWidth;
+
+  textEl.textContent = text;
+  el.setAttribute('aria-hidden', 'false');
+  el.classList.add('show');
+
+  // 飘屏出现时给一个轻提示音
+  if (state.soundEnabled) {
+    try {
+      ensureAudio();
+      playTone(523, 0.10, 0.18, 'sine', 0);
+      playTone(784, 0.10, 0.20, 'sine', 0.10);
+      playTone(1047, 0.14, 0.18, 'sine', 0.20);
+    } catch (_) {}
+  }
+
+  clearTimeout(gmBroadcastTimer);
+  gmBroadcastTimer = setTimeout(() => {
+    el.classList.remove('show');
+    el.setAttribute('aria-hidden', 'true');
+  }, 3000);
+}
+
+let resizeTimer;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => {
+    resizeCanvasIfNeeded();
+    drawWheel();
+  }, 120);
+});
+
+document.querySelectorAll('[data-mode]').forEach(btn => btn.addEventListener('click', () => setMode(btn.dataset.mode)));
+spinBtn.addEventListener('click', spin);
+sideSpinBtn.addEventListener('click', spin);
+autoSpinNext.addEventListener('change', saveSettings);
+document.getElementById('refreshBtn').addEventListener('click', () => loadServerData(false));
+if (soundToggle) soundToggle.addEventListener('click', toggleSound);
+updateSoundToggle();
+closeModal.addEventListener('click', () => closeResultModal());
+resultModal.addEventListener('click', (event) => {
+  if (event.target && event.target.hasAttribute('data-close-modal')) closeResultModal();
+});
+modalAgain.addEventListener('click', () => {
+  closeResultModal();
+  setTimeout(spin, 180);
+});
+modalBack.addEventListener('click', () => {
+  closeResultModal();
+  setMode('main');
+});
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') closeResultModal();
+});
+
+// 点名功能事件
+peopleMinus.addEventListener('click', () => setPeopleCount(getPeopleCount() - 1));
+peoplePlus.addEventListener('click', () => setPeopleCount(getPeopleCount() + 1));
+peopleCountInput.addEventListener('input', () => {
+  // 输入时实时校验范围,但不立即触发保存
+  const v = Number(peopleCountInput.value);
+  if (Number.isFinite(v) && v >= 1 && v <= 50) {
+    schedulePeopleSave();
+  }
+});
+peopleCountInput.addEventListener('blur', () => {
+  // 失焦时把不合法的值修正
+  setPeopleCount(getPeopleCount());
+});
+pickerGo.addEventListener('click', pickRandomPerson);
+
+makeParticles();
+resizeCanvasIfNeeded();
+loadServerData(true);
+setInterval(() => loadServerData(true), 8000);

@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>真心话 · 大冒险|炫酷转盘</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <main class="app">
+    <header class="topbar">
+      <div class="brand">
+        <div class="logo">GO</div>
+        <div>
+          <h1 id="pageTitle">真心话 · 大冒险</h1>
+          <div class="subtitle">玩家页:题库很多也流畅;完整结果会全屏弹窗显示</div>
+        </div>
+      </div>
+      <div class="top-actions">
+        <div class="status-pill">当前:<strong id="modeName">主转盘</strong></div>
+        <div class="support-top" aria-label="作者主页和赞赏码">
+          <a class="support-pill author-home" href="https://v.douyin.com/R5E-sjGaqBY/" target="_blank" rel="noopener noreferrer">👤 作者主页</a>
+          <button class="support-pill reward-btn" id="rewardOpen" type="button">💛 赞赏码</button>
+          <a class="support-pill mail-home" href="mailto:752522616@qq.com">✉️ 作者主页</a>
+        </div>
+      </div>
+    </header>
+
+    <section class="wheel-layout">
+      <div class="stage">
+        <div class="mode-tabs">
+          <button class="tab active" data-mode="main">🎯 主转盘</button>
+          <button class="tab" data-mode="truth">💬 真心话</button>
+          <button class="tab" data-mode="dare">⚡ 大冒险</button>
+        </div>
+
+        <div class="wheel-wrap" aria-label="游戏转盘">
+          <div class="wheel-aura"></div>
+          <div class="wheel-ring"></div>
+          <div class="pointer"></div>
+          <canvas id="wheel" width="900" height="900"></canvas>
+          <button class="spin-core" id="spinBtn">START</button>
+        </div>
+
+        <div class="stage-footer">
+          <div class="result-line" id="resultLine">点击 START 开始</div>
+          <div id="resultTip">主转盘会决定进入"真心话"还是"大冒险"</div>
+        </div>
+      </div>
+
+      <div class="quick-controls">
+        <button class="ghost-btn" data-mode="main">🎯 主转盘</button>
+        <button class="ghost-btn" id="sideSpinBtn">立即开转</button>
+        <button class="ghost-btn" id="refreshBtn">刷新数据</button>
+        <button class="ghost-btn" id="soundToggle" type="button">🔊 转轮音效:开</button>
+        <label class="switch-row">
+          <span>自动连转</span>
+          <input type="checkbox" id="autoSpinNext" />
+        </label>
+      </div>
+
+      <div class="picker-card">
+        <div class="picker-head">
+          <h3>🎲 随机点名</h3>
+          <div class="picker-people">
+            <label for="peopleCount">人数</label>
+            <button class="picker-step" id="peopleMinus" type="button">−</button>
+            <input type="number" id="peopleCount" min="1" max="50" value="3" />
+            <button class="picker-step" id="peoplePlus" type="button">+</button>
+          </div>
+        </div>
+        <div class="picker-body">
+          <div class="picker-result" id="pickerResult">
+            <span class="picker-tip">点下面按钮抽一个号</span>
+          </div>
+          <button class="primary-btn picker-go" id="pickerGo" type="button">随机点名</button>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+
+  <div class="reward-modal" id="rewardModal" aria-hidden="true" role="dialog" aria-modal="true">
+    <div class="reward-modal__backdrop" data-close-reward></div>
+    <section class="reward-modal__card" aria-labelledby="rewardTitle">
+      <button class="modal-close" id="rewardClose" aria-label="关闭赞赏码">×</button>
+      <div class="result-kicker">💛 感谢老板支持</div>
+      <h2 id="rewardTitle">赞赏码</h2>
+      <p class="reward-subtitle">喜欢这个转盘的话,可以扫码支持一下作者</p>
+      <img class="reward-image" src="/assets/reward-code.jpg" alt="乔大仙的赞赏码" />
+      <a class="douyin-link" href="https://v.douyin.com/R5E-sjGaqBY/" target="_blank" rel="noopener noreferrer">打开作者抖音主页</a>
+    </section>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <div class="gm-broadcast" id="gmBroadcast" aria-hidden="true" aria-live="polite">
+    <div class="gm-broadcast__bg"></div>
+    <div class="gm-broadcast__text" id="gmBroadcastText"></div>
+  </div>
+
+  <div class="result-modal" id="resultModal" aria-hidden="true" role="dialog" aria-modal="true">
+    <div class="result-modal__backdrop" data-close-modal></div>
+    <section class="result-modal__card" aria-labelledby="modalTitle">
+      <button class="modal-close" id="closeModal" aria-label="关闭弹窗">×</button>
+      <div class="result-kicker" id="modalKicker">💬 真心话</div>
+      <h2 id="modalTitle">第 1 条</h2>
+      <p id="modalText">结果内容</p>
+      <div class="modal-actions">
+        <button class="primary-btn" id="modalAgain">再抽一次</button>
+        <button class="ghost-btn" id="modalBack">回主转盘</button>
+      </div>
+    </section>
+  </div>
+  <script src="/common.js"></script>
+  <script src="/wheel.js"></script>
+</body>
+</html>
