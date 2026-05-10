@@ -682,6 +682,26 @@ body.modal-open { overflow: hidden; }
   color: rgba(255, 255, 255, .92);
   word-break: break-word;
 }
+.preview-item-edit {
+  display: inline;
+  padding: 2px 6px;
+  margin-left: 2px;
+  border-radius: 6px;
+  cursor: text;
+  outline: none;
+  border: 1px dashed transparent;
+  transition: background .15s ease, border-color .15s ease;
+  white-space: pre-wrap;
+}
+.preview-item-edit:hover {
+  background: rgba(49, 247, 255, .08);
+  border-color: rgba(49, 247, 255, .28);
+}
+.preview-item-edit:focus {
+  background: rgba(49, 247, 255, .14);
+  border-color: rgba(49, 247, 255, .55);
+  box-shadow: 0 0 0 2px rgba(49, 247, 255, .14);
+}
 .preview-item-actions {
   display: flex;
   align-items: center;

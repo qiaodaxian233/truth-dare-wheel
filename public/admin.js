@@ -176,7 +176,10 @@ function renderPreview() {
     const li = document.createElement('li');
     li.className = 'preview-item';
     li.innerHTML = `
-      <div class="preview-item-text"><em>#${index + 1}</em> ${escapeHTML(text)}</div>
+      <div class="preview-item-text">
+        <em>#${index + 1}</em>
+        <span class="preview-item-edit" data-text-idx="${index}" contenteditable="true" spellcheck="false" title="点击直接编辑题目，按 Enter 或点其它地方保存">${escapeHTML(text)}</span>
+      </div>
       <div class="preview-item-actions">
         <div class="preview-item-weight">
           <label>权重</label>
@@ -202,6 +205,66 @@ function renderPreview() {
   previewList.querySelectorAll('button[data-delete-idx]').forEach(btn => {
     btn.addEventListener('click', () => deletePreviewItem(Number(btn.dataset.deleteIdx)));
   });
+
+  // 题目文本内联编辑:Enter 保存,Esc 取消,失焦也保存
+  previewList.querySelectorAll('span[data-text-idx]').forEach(span => {
+    // 记录初始内容,便于回滚和判断是否有修改
+    span.dataset.original = span.textContent;
+    span.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        span.blur(); // 触发 blur 保存
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        span.textContent = span.dataset.original || '';
+        span.blur();
+      }
+    });
+    span.addEventListener('blur', () => commitTextEdit(span));
+    // 粘贴时去掉富文本格式
+    span.addEventListener('paste', (e) => {
+      e.preventDefault();
+      const text = (e.clipboardData || window.clipboardData).getData('text');
+      document.execCommand('insertText', false, text);
+    });
+  });
+}
+
+async function commitTextEdit(span) {
+  const idx = Number(span.dataset.textIdx);
+  const mode = targetSelect.value;
+  const list = state.data[mode] || [];
+  if (idx < 0 || idx >= list.length) return;
+  // 把多行换行折成空格,去掉首尾空白
+  const newText = (span.textContent || '').replace(/\s+/g, ' ').trim();
+  const original = span.dataset.original || '';
+  if (newText === original) return; // 没改
+  if (!newText) {
+    showToast('题目不能为空,已恢复');
+    span.textContent = original;
+    return;
+  }
+  // 重名检查:同列表内若已有相同文本会被服务端去重,提醒一下
+  const dup = list.some((it, i) => i !== idx && itemText(it) === newText);
+  if (dup) {
+    showToast('已有相同题目,合并时会去重,建议改个不同的');
+    span.textContent = original;
+    return;
+  }
+  // 更新内存:保留权重
+  const cur = list[idx];
+  const weight = itemWeight(cur);
+  list[idx] = weight === 1 ? newText : { text: newText, weight };
+  try {
+    state.data = await apiAdminSaveData(state.data);
+    span.dataset.original = newText;
+    showToast('题目已更新');
+  } catch (err) {
+    // 回滚
+    list[idx] = cur;
+    span.textContent = original;
+    showToast(err.message || '保存失败');
+  }
 }
 
 async function deletePreviewItem(idx) {
