@@ -37,6 +37,15 @@ const adminPasswordInput = document.getElementById('adminPasswordInput');
 const adminPasswordStatus = document.getElementById('adminPasswordStatus');
 const savePasswordBtn = document.getElementById('savePasswordBtn');
 
+// 转动次数 / 猜左右
+const spinCountInput = document.getElementById('spinCountInput');
+const spinUnlimitedInput = document.getElementById('spinUnlimitedInput');
+const guessEnabledInput = document.getElementById('guessEnabledInput');
+const guessRewardInput = document.getElementById('guessRewardInput');
+const guessPenaltyMinInput = document.getElementById('guessPenaltyMinInput');
+const guessPenaltyMaxInput = document.getElementById('guessPenaltyMaxInput');
+const saveSpinSettingsBtn = document.getElementById('saveSpinSettingsBtn');
+
 // 登录遮罩相关
 const loginOverlay = document.getElementById('loginOverlay');
 const loginPasswordInput = document.getElementById('loginPasswordInput');
@@ -84,14 +93,48 @@ function updateBroadcastCount() {
 async function loadData(silent = false) {
   try {
     state.data = await apiGetData();
-    pageTitleInput.value = state.data.settings?.pageTitle || '真心话 · 大冒险';
-    autoSpinNext.checked = !!state.data.settings?.autoSpinNext;
+    const s = state.data.settings || {};
+    pageTitleInput.value = s.pageTitle || '真心话 · 大冒险';
+    autoSpinNext.checked = !!s.autoSpinNext;
+    // 转动次数 / 猜左右
+    if (spinCountInput) spinCountInput.value = Number(s.spinCount) || 0;
+    if (spinUnlimitedInput) spinUnlimitedInput.checked = !!s.spinUnlimited;
+    if (guessEnabledInput) guessEnabledInput.checked = s.guessEnabled !== false;
+    if (guessRewardInput) guessRewardInput.value = String(Number(s.guessRewardOnCorrect) || 0);
+    if (guessPenaltyMinInput) guessPenaltyMinInput.value = Number(s.guessPenaltyMin) || 1;
+    if (guessPenaltyMaxInput) guessPenaltyMaxInput.value = Number(s.guessPenaltyMax) || 10;
     renderCounts();
     renderMainWeights();
     renderPreview();
     if (!silent) showToast('数据已刷新');
   } catch (err) {
     showToast(err.message || '读取数据失败');
+  }
+}
+
+async function saveSpinSettings() {
+  const lo = Math.max(0, parseInt(guessPenaltyMinInput?.value) || 0);
+  const hi = Math.max(lo, parseInt(guessPenaltyMaxInput?.value) || lo);
+  state.data.settings = {
+    ...(state.data.settings || {}),
+    spinCount: Math.max(0, parseInt(spinCountInput?.value) || 0),
+    spinUnlimited: !!spinUnlimitedInput?.checked,
+    guessEnabled: !!guessEnabledInput?.checked,
+    guessRewardOnCorrect: Math.max(0, parseInt(guessRewardInput?.value) || 0),
+    guessPenaltyMin: lo,
+    guessPenaltyMax: hi
+  };
+  saveSpinSettingsBtn.disabled = true;
+  const original = saveSpinSettingsBtn.textContent;
+  saveSpinSettingsBtn.textContent = '保存中…';
+  try {
+    state.data = await apiAdminSaveData(state.data);
+    showToast('转动次数 / 猜左右设置已保存');
+  } catch (err) {
+    showToast(err.message || '保存失败');
+  } finally {
+    saveSpinSettingsBtn.disabled = false;
+    saveSpinSettingsBtn.textContent = original;
   }
 }
 
@@ -436,6 +479,9 @@ if (adminPasswordInput) {
     }
   });
 }
+
+// 转动次数 / 猜左右保存
+if (saveSpinSettingsBtn) saveSpinSettingsBtn.addEventListener('click', saveSpinSettings);
 
 // 登录遮罩
 if (loginSubmitBtn) loginSubmitBtn.addEventListener('click', handleLoginSubmit);

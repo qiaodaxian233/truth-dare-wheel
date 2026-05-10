@@ -109,6 +109,45 @@ h1 {
 .status-pill strong { color: #fff; }
 .nav-pill:hover { color: #fff; border-color: rgba(49,247,255,.42); }
 
+/* 转动次数胶囊 */
+.spin-count-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: linear-gradient(135deg, rgba(49,247,255,.18), rgba(255,60,240,.16));
+  border-color: rgba(49,247,255,.4);
+  color: #fff;
+  font-weight: 700;
+  transition: background .25s, border-color .25s;
+}
+.spin-count-pill strong {
+  color: #ffd166;
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: .5px;
+  margin: 0 4px;
+}
+.spin-count-pill.is-empty {
+  background: linear-gradient(135deg, rgba(255,77,109,.32), rgba(255,77,109,.18));
+  border-color: rgba(255,77,109,.6);
+  animation: spinEmptyPulse 1.6s ease-in-out infinite;
+}
+.spin-count-pill.is-empty strong { color: #ffe6ec; }
+@keyframes spinEmptyPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255,77,109,.5); }
+  50% { box-shadow: 0 0 0 8px rgba(255,77,109,0); }
+}
+.spin-unlimited-badge {
+  margin-left: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(255,209,102,.28);
+  color: #ffe9a8;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: .5px;
+}
+
 .support-top {
   display: inline-flex;
   align-items: center;
@@ -536,6 +575,75 @@ body.modal-open { overflow: hidden; }
 }
 .modal-actions .primary-btn,
 .modal-actions .ghost-btn { min-height: 54px; }
+
+/* ===== 猜左右(大冒险弹窗内)===== */
+.guess-box {
+  margin-top: 22px;
+  padding: 16px 16px 14px;
+  border-radius: 18px;
+  background: linear-gradient(150deg, rgba(49,247,255,.12), rgba(255,60,240,.10));
+  border: 1px solid rgba(255,255,255,.16);
+}
+.guess-prompt {
+  text-align: center;
+  color: rgba(255,255,255,.86);
+  font-size: 14px;
+  margin: 0 0 12px;
+  font-weight: 600;
+}
+.guess-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.guess-btn {
+  appearance: none;
+  border: 1px solid rgba(255,255,255,.22);
+  border-radius: 14px;
+  padding: 14px 12px;
+  font-size: 18px;
+  font-weight: 800;
+  color: #fff;
+  cursor: pointer;
+  transition: transform .14s ease, background .2s ease, border-color .2s ease, box-shadow .2s ease;
+  background: rgba(255,255,255,.08);
+}
+.guess-left {
+  background: linear-gradient(135deg, rgba(49,247,255,.32), rgba(49,247,255,.16));
+  border-color: rgba(49,247,255,.55);
+}
+.guess-right {
+  background: linear-gradient(135deg, rgba(255,60,240,.32), rgba(255,60,240,.16));
+  border-color: rgba(255,60,240,.55);
+}
+.guess-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 28px rgba(0,0,0,.32);
+}
+.guess-btn:active:not(:disabled) { transform: translateY(0) scale(.97); }
+.guess-btn:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+}
+.guess-result {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  text-align: center;
+  font-weight: 800;
+  font-size: 15px;
+  letter-spacing: .02em;
+}
+.guess-result.is-correct {
+  background: rgba(52,211,153,.22);
+  border: 1px solid rgba(52,211,153,.5);
+  color: #b6f1d4;
+}
+.guess-result.is-wrong {
+  background: rgba(255,77,109,.22);
+  border: 1px solid rgba(255,77,109,.5);
+  color: #ffd2dc;
+}
 
 /* More comfortable mobile layout */
 @media (max-width: 560px) {

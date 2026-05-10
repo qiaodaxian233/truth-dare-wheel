@@ -48,12 +48,73 @@ const peoplePlus = document.getElementById('peoplePlus');
 const pickerGo = document.getElementById('pickerGo');
 const pickerResult = document.getElementById('pickerResult');
 
+// 转动次数 / 猜左右
+const spinCountPill = document.getElementById('spinCountPill');
+const spinCountValue = document.getElementById('spinCountValue');
+const spinUnlimitedBadge = document.getElementById('spinUnlimitedBadge');
+const guessBox = document.getElementById('guessBox');
+const guessLeftBtn = document.getElementById('guessLeftBtn');
+const guessRightBtn = document.getElementById('guessRightBtn');
+const guessResult = document.getElementById('guessResult');
+
 const palette = [
   ['#31f7ff', '#0ea5e9'], ['#ff3cf0', '#a855f7'], ['#ffd166', '#fb923c'],
   ['#34d399', '#10b981'], ['#f472b6', '#e11d48'], ['#a78bfa', '#6366f1'],
   ['#facc15', '#f97316'], ['#22d3ee', '#2563eb'], ['#fb7185', '#be123c'],
   ['#c084fc', '#7c3aed']
 ];
+
+// ===== 转动次数显示 + 猜左右 =====
+function updateSpinCountDisplay(info) {
+  if (!spinCountPill) return;
+  const remaining = Number(info?.remaining ?? state.data?.settings?.spinCount) || 0;
+  const unlimited = !!(info?.unlimited ?? state.data?.settings?.spinUnlimited);
+  spinCountPill.hidden = false;
+  if (spinCountValue) spinCountValue.textContent = unlimited ? '∞' : String(remaining);
+  if (spinUnlimitedBadge) spinUnlimitedBadge.hidden = !unlimited;
+  spinCountPill.classList.toggle('is-empty', !unlimited && remaining <= 0);
+}
+
+async function submitGuess(guess) {
+  if (guessLeftBtn) guessLeftBtn.disabled = true;
+  if (guessRightBtn) guessRightBtn.disabled = true;
+  try {
+    const res = await fetch('/api/guess', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ guess })
+    });
+    const json = await res.json();
+    if (!json.ok) throw new Error(json.message || '提交失败');
+    // 同步剩余次数
+    updateSpinCountDisplay(json);
+    if (state.data && state.data.settings) {
+      state.data.settings.spinCount = json.remaining;
+      state.data.settings.spinUnlimited = json.unlimited;
+    }
+    if (guessResult) {
+      guessResult.hidden = false;
+      const arrow = json.answer === 'left' ? '⬅' : '➡';
+      if (json.correct) {
+        guessResult.className = 'guess-result is-correct';
+        guessResult.textContent = json.delta > 0
+          ? `🎉 猜对啦!正确答案是 ${arrow}  返还 +${json.delta} 次`
+          : `🎉 猜对啦!正确答案是 ${arrow}`;
+      } else {
+        guessResult.className = 'guess-result is-wrong';
+        guessResult.textContent = `😅 猜错了,正确答案是 ${arrow}  增加 +${json.delta} 次转动`;
+      }
+    }
+  } catch (err) {
+    if (guessResult) {
+      guessResult.hidden = false;
+      guessResult.className = 'guess-result is-wrong';
+      guessResult.textContent = err.message || '提交失败';
+    }
+    if (guessLeftBtn) guessLeftBtn.disabled = false;
+    if (guessRightBtn) guessRightBtn.disabled = false;
+  }
+}
 
 async function loadServerData(silent = false) {
   if (state.spinning && silent) return;
@@ -93,6 +154,12 @@ async function loadServerData(silent = false) {
       document.getElementById('pageTitle').textContent = state.data.settings.pageTitle;
       document.title = state.data.settings.pageTitle + '|炫酷转盘';
     }
+
+    // 更新转动次数胶囊显示
+    updateSpinCountDisplay({
+      remaining: Number(state.data.settings.spinCount) || 0,
+      unlimited: !!state.data.settings.spinUnlimited
+    });
 
     if (changed) invalidateWheelCache();
     resizeCanvasIfNeeded();
@@ -442,13 +509,30 @@ function playFinishSound() {
   playTone(783.99, 0.16, 0.15, 'triangle', 0.19);
 }
 
-function spin() {
+async function spin() {
   if (state.spinning) return;
   closeResultModal(false);
   const segments = getSegments();
   if (!segments.length || String(labelOf(segments[0])).startsWith('暂无数据')) {
     showToast('这个转盘还没有数据,请到导入控制台添加。');
     return;
+  }
+
+  // 主转盘启动:消耗 1 次(服务端原子扣减)。其它模式(直接进真心话/大冒险大转盘)不扣
+  if (state.mode === 'main') {
+    try {
+      const res = await fetch('/api/spin/start', { method: 'POST', cache: 'no-store' });
+      const json = await res.json();
+      if (!json.ok) {
+        showToast(json.message || '转动次数已用完,请联系主播');
+        updateSpinCountDisplay(json);
+        return;
+      }
+      updateSpinCountDisplay(json);
+    } catch (err) {
+      // 网络挂了仍允许继续(避免完全卡死)
+      console.warn('spin/start failed, allow continue:', err);
+    }
   }
 
   state.spinning = true;
@@ -512,15 +596,32 @@ function finishSpin(selected, selectedIndex) {
     showResultModal({
       kicker: isTruth ? '💬 真心话' : '⚡ 大冒险',
       title: `第 ${selectedIndex + 1} 条`,
-      text
+      text,
+      showGuess: !isTruth // 大冒险才显示猜左右
     });
   }
 }
 
-function showResultModal({ kicker, title, text }) {
+function showResultModal({ kicker, title, text, showGuess }) {
   modalKicker.textContent = kicker;
   modalTitle.textContent = title;
   modalText.textContent = text;
+  // 猜左右块:仅大冒险且 admin 启用时显示
+  const guessEnabled = !!state.data?.settings?.guessEnabled;
+  if (guessBox) {
+    if (showGuess && guessEnabled) {
+      guessBox.hidden = false;
+      if (guessLeftBtn) guessLeftBtn.disabled = false;
+      if (guessRightBtn) guessRightBtn.disabled = false;
+      if (guessResult) {
+        guessResult.hidden = true;
+        guessResult.textContent = '';
+        guessResult.className = 'guess-result';
+      }
+    } else {
+      guessBox.hidden = true;
+    }
+  }
   resultModal.classList.add('show');
   resultModal.setAttribute('aria-hidden', 'false');
   document.body.classList.add('modal-open');
@@ -697,6 +798,10 @@ autoSpinNext.addEventListener('change', saveSettings);
 document.getElementById('refreshBtn').addEventListener('click', () => loadServerData(false));
 if (soundToggle) soundToggle.addEventListener('click', toggleSound);
 updateSoundToggle();
+
+// 猜左右按钮
+if (guessLeftBtn) guessLeftBtn.addEventListener('click', () => submitGuess('left'));
+if (guessRightBtn) guessRightBtn.addEventListener('click', () => submitGuess('right'));
 closeModal.addEventListener('click', () => closeResultModal());
 resultModal.addEventListener('click', (event) => {
   if (event.target && event.target.hasAttribute('data-close-modal')) closeResultModal();

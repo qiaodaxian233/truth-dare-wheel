@@ -107,6 +107,45 @@
           <button class="primary-btn" id="savePasswordBtn">保存密码</button>
         </div>
 
+        <h2 style="margin-top:22px;">🎲 转动次数 / 猜左右</h2>
+        <p class="hint" style="margin-top:0">每次玩家点 START(主转盘启动)消耗 1 次。次数为 0 时玩家无法继续抽。<br>开启「猜左右」后,大冒险结果弹窗会出现猜左右按钮:猜对返还次数,猜错增加次数。</p>
+        <div class="row field" style="grid-template-columns: 1fr 1fr;">
+          <div>
+            <label for="spinCountInput">当前剩余转动次数</label>
+            <input type="number" id="spinCountInput" min="0" max="99999" step="1" value="0" />
+          </div>
+          <label class="switch-row" style="margin: 22px 0 0;">
+            <span>♾ 无限转(忽略次数)</span>
+            <input type="checkbox" id="spinUnlimitedInput" />
+          </label>
+        </div>
+        <label class="switch-row">
+          <span>启用「猜左右」(大冒险弹窗中显示)</span>
+          <input type="checkbox" id="guessEnabledInput" checked />
+        </label>
+        <div class="row field" style="grid-template-columns: 1fr 1fr 1fr;">
+          <div>
+            <label for="guessRewardInput">猜对返还次数</label>
+            <select id="guessRewardInput">
+              <option value="0">0(不变)</option>
+              <option value="1" selected>1(本次抽奖白嫖)</option>
+              <option value="2">2(奖励 1 次)</option>
+              <option value="3">3(奖励 2 次)</option>
+            </select>
+          </div>
+          <div>
+            <label for="guessPenaltyMinInput">猜错最少加</label>
+            <input type="number" id="guessPenaltyMinInput" min="0" max="100" step="1" value="1" />
+          </div>
+          <div>
+            <label for="guessPenaltyMaxInput">猜错最多加</label>
+            <input type="number" id="guessPenaltyMaxInput" min="0" max="100" step="1" value="10" />
+          </div>
+        </div>
+        <div class="field">
+          <button class="primary-btn" id="saveSpinSettingsBtn">保存转动次数 / 猜左右设置</button>
+        </div>
+
         <div class="count-box">
           <div class="count-item"><b id="countMain">2</b><span>主转盘</span></div>
           <div class="count-item"><b id="countTruth">0</b><span>真心话</span></div>

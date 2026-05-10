@@ -36,7 +36,14 @@ const defaultData = {
   settings: {
     autoSpinNext: false,
     pageTitle: '真心话 · 大冒险',
-    adminPassword: ''
+    adminPassword: '',
+    // ===== 转动次数 / 猜左右 =====
+    spinCount: 0,            // 剩余转动次数(主播在 admin 设置)
+    spinUnlimited: false,    // 无限转模式,开启后忽略次数限制
+    guessEnabled: true,      // 启用「猜左右」环节
+    guessRewardOnCorrect: 1, // 猜对返还次数(0=不变,1=返还1次=本次主转盘相当于不扣)
+    guessPenaltyMin: 1,      // 猜错惩罚最小值
+    guessPenaltyMax: 10      // 猜错惩罚最大值
   },
   broadcast: { id: 0, text: '', createdAt: 0 }
 };
@@ -112,6 +119,13 @@ function normalizeData(input) {
   const src = input && typeof input === 'object' ? input : {};
   const settingsIn = src.settings && typeof src.settings === 'object' ? src.settings : {};
   const broadcastIn = src.broadcast && typeof src.broadcast === 'object' ? src.broadcast : {};
+  // 数字字段统一转换 + 边界裁剪
+  const num = (v, def, min, max) => {
+    const n = Number(v);
+    if (!Number.isFinite(n)) return def;
+    if (typeof min === 'number') return Math.max(min, Math.min(typeof max === 'number' ? max : n, n));
+    return n;
+  };
   return {
     main: normalizeMain(src.main),
     truth: normalizeList(src.truth && src.truth.length ? src.truth : defaultData.truth),
@@ -120,7 +134,14 @@ function normalizeData(input) {
       ...defaultData.settings,
       ...settingsIn,
       // 密码默认空字符串,稍后由调用方决定
-      adminPassword: typeof settingsIn.adminPassword === 'string' ? settingsIn.adminPassword : ''
+      adminPassword: typeof settingsIn.adminPassword === 'string' ? settingsIn.adminPassword : '',
+      // 转动次数 / 猜左右(数字字段做边界裁剪)
+      spinCount: Math.max(0, Math.floor(num(settingsIn.spinCount, 0, 0, 99999))),
+      spinUnlimited: !!settingsIn.spinUnlimited,
+      guessEnabled: settingsIn.guessEnabled === undefined ? true : !!settingsIn.guessEnabled,
+      guessRewardOnCorrect: Math.max(0, Math.floor(num(settingsIn.guessRewardOnCorrect, 1, 0, 100))),
+      guessPenaltyMin: Math.max(0, Math.floor(num(settingsIn.guessPenaltyMin, 1, 0, 100))),
+      guessPenaltyMax: Math.max(0, Math.floor(num(settingsIn.guessPenaltyMax, 10, 0, 100)))
     },
     broadcast: {
       id: Number(broadcastIn.id) || 0,
@@ -213,6 +234,58 @@ function setBroadcast(text) {
   const out = JSON.parse(JSON.stringify(existing));
   if (out.settings) delete out.settings.adminPassword;
   return out;
+}
+
+// 主转盘启动消耗 1 次
+// 返回 { ok, remaining, unlimited, message? }
+function consumeSpin() {
+  ensureDataFile();
+  const existing = readDataInternal();
+  const s = existing.settings;
+  if (s.spinUnlimited) {
+    return { ok: true, remaining: s.spinCount, unlimited: true };
+  }
+  if (s.spinCount <= 0) {
+    return { ok: false, remaining: 0, unlimited: false, message: '转动次数已用完,请联系主播添加' };
+  }
+  s.spinCount = Math.max(0, s.spinCount - 1);
+  fs.writeFileSync(DATA_FILE, JSON.stringify(existing, null, 2), 'utf8');
+  return { ok: true, remaining: s.spinCount, unlimited: false };
+}
+
+// 猜左右
+// guess: 'left' | 'right'
+// 返回 { ok, correct, answer, delta, remaining, unlimited }
+function applyGuess(guess) {
+  ensureDataFile();
+  const existing = readDataInternal();
+  const s = existing.settings;
+  const g = guess === 'left' ? 'left' : guess === 'right' ? 'right' : null;
+  if (!g) {
+    return { ok: false, message: '无效的猜测,只能是 left 或 right' };
+  }
+  // 服务端随机生成正确答案(防前端作弊)
+  const answer = Math.random() < 0.5 ? 'left' : 'right';
+  const correct = (g === answer);
+  let delta = 0;
+  if (correct) {
+    delta = +Math.max(0, Math.floor(Number(s.guessRewardOnCorrect) || 0));
+  } else {
+    const lo = Math.max(0, Math.floor(Number(s.guessPenaltyMin) || 1));
+    const hi = Math.max(lo, Math.floor(Number(s.guessPenaltyMax) || 10));
+    delta = lo + Math.floor(Math.random() * (hi - lo + 1)); // [lo, hi]
+  }
+  // 应用 delta(无限模式也累加,主播切回有限模式后值仍正确)
+  s.spinCount = Math.max(0, (Number(s.spinCount) || 0) + delta);
+  fs.writeFileSync(DATA_FILE, JSON.stringify(existing, null, 2), 'utf8');
+  return {
+    ok: true,
+    correct,
+    answer,
+    delta,
+    remaining: s.spinCount,
+    unlimited: !!s.spinUnlimited
+  };
 }
 
 function isAuthorized(req) {
@@ -356,6 +429,20 @@ const server = http.createServer(async (req, res) => {
       }
       const saved = setBroadcast(text);
       return sendJson(res, 200, { ok: true, data: saved });
+    }
+
+    // ===== 玩家:主转盘启动消耗 1 次(无需鉴权)=====
+    if (pathname === '/api/spin/start' && req.method === 'POST') {
+      const result = consumeSpin();
+      return sendJson(res, result.ok ? 200 : 409, result);
+    }
+
+    // ===== 玩家:猜左右(无需鉴权,正确答案服务端生成防作弊)=====
+    if (pathname === '/api/guess' && req.method === 'POST') {
+      const raw = await readBody(req);
+      const payload = JSON.parse(raw || '{}');
+      const result = applyGuess(payload.guess);
+      return sendJson(res, result.ok ? 200 : 400, result);
     }
 
     return serveStatic(req, res);
