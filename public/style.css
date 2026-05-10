@@ -417,18 +417,27 @@ input[type="file"] { padding: 12px; }
 }
 /* 平板/小窗口 */
 @media (max-width: 760px) {
-  .wheel-wrap { width: min(92vmin, 600px); }
+  /* 同时限制宽度(86vw)和高度(60vh),避免转盘吃光竖向空间 */
+  .wheel-wrap { width: min(86vw, 60vh, 560px); }
   .quick-controls { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 /* 手机 */
 @media (max-width: 560px) {
-  .app { padding: 18px 12px 28px; }
+  .app { padding: 14px 12px 24px; }
   .stage, .panel, .admin-card { border-radius: 24px; }
-  .stage { padding: 16px 10px 20px; }
-  .wheel-wrap { width: min(94vw, 94vmin); }
-  .pointer { border-left-width: 18px; border-right-width: 18px; border-top-width: 38px; }
+  .stage { padding: 14px 10px 16px; }
+  /* 手机竖屏:用 vh 卡死高度,确保下方点名/控制按钮能同屏看到 */
+  .wheel-wrap { width: min(82vw, 56vh, 460px); }
+  .pointer { border-left-width: 14px; border-right-width: 14px; border-top-width: 30px; }
+  .stage-footer { margin-top: 8px; }
+  .result-line { font-size: 16px; }
+  #resultTip { font-size: 12px; }
   .row, .count-box { grid-template-columns: 1fr; }
   .quick-controls { grid-template-columns: 1fr 1fr; }
+}
+/* 极矮屏(横屏手机)再加一道保险 */
+@media (max-height: 700px) and (max-width: 900px) {
+  .wheel-wrap { width: min(70vw, 58vh, 460px); }
 }
 /* 大屏增强 */
 @media (min-width: 1280px) {
