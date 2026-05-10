@@ -37,7 +37,8 @@ const defaultData = {
     autoSpinNext: false,
     pageTitle: '真心话 · 大冒险',
     adminPassword: ''
-  }
+  },
+  broadcast: { id: 0, text: '', createdAt: 0 }
 };
 
 const mimeTypes = {
@@ -110,6 +111,7 @@ function normalizeMain(list) {
 function normalizeData(input) {
   const src = input && typeof input === 'object' ? input : {};
   const settingsIn = src.settings && typeof src.settings === 'object' ? src.settings : {};
+  const broadcastIn = src.broadcast && typeof src.broadcast === 'object' ? src.broadcast : {};
   return {
     main: normalizeMain(src.main),
     truth: normalizeList(src.truth && src.truth.length ? src.truth : defaultData.truth),
@@ -119,6 +121,11 @@ function normalizeData(input) {
       ...settingsIn,
       // 密码默认空字符串,稍后由调用方决定
       adminPassword: typeof settingsIn.adminPassword === 'string' ? settingsIn.adminPassword : ''
+    },
+    broadcast: {
+      id: Number(broadcastIn.id) || 0,
+      text: String(broadcastIn.text || '').slice(0, 200),
+      createdAt: Number(broadcastIn.createdAt) || 0
     }
   };
 }
@@ -157,7 +164,7 @@ function writeDataInternal(newData) {
 }
 
 // 玩家页保存:只允许更新 settings 中的非敏感字段(autoSpinNext, peopleCount 等)
-// 不能改 main/truth/dare,不能改密码,不能改 pageTitle
+// 不能改 main/truth/dare,不能改密码,不能改 pageTitle,不能改 broadcast
 function writePlayerSafe(newData) {
   ensureDataFile();
   const existing = readDataInternal();
@@ -175,7 +182,8 @@ function writePlayerSafe(newData) {
     main: existing.main,
     truth: existing.truth,
     dare: existing.dare,
-    settings: mergedSettings
+    settings: mergedSettings,
+    broadcast: existing.broadcast || { id: 0, text: '', createdAt: 0 }
   };
   fs.writeFileSync(DATA_FILE, JSON.stringify(merged, null, 2), 'utf8');
   const out = JSON.parse(JSON.stringify(merged));
@@ -189,6 +197,22 @@ function setAdminPassword(newPassword) {
   existing.settings.adminPassword = String(newPassword || '');
   fs.writeFileSync(DATA_FILE, JSON.stringify(existing, null, 2), 'utf8');
   return existing.settings.adminPassword;
+}
+
+function setBroadcast(text) {
+  ensureDataFile();
+  const existing = readDataInternal();
+  const cleaned = String(text || '').slice(0, 200).trim();
+  existing.broadcast = {
+    id: Date.now(),
+    text: cleaned,
+    createdAt: Date.now()
+  };
+  fs.writeFileSync(DATA_FILE, JSON.stringify(existing, null, 2), 'utf8');
+  // 返回剥离密码版
+  const out = JSON.parse(JSON.stringify(existing));
+  if (out.settings) delete out.settings.adminPassword;
+  return out;
 }
 
 function isAuthorized(req) {
@@ -315,6 +339,22 @@ const server = http.createServer(async (req, res) => {
         return sendJson(res, 401, { ok: false, message: '未授权,请先登录' });
       }
       const saved = writeDataInternal(defaultData);
+      return sendJson(res, 200, { ok: true, data: saved });
+    }
+
+    // ===== GM 飘屏(管理员)=====
+    // 把消息写到 data.broadcast,玩家页轮询 GET /api/data 时拿到新 id 就触发飘屏
+    if (pathname === '/api/broadcast' && req.method === 'POST') {
+      if (!isAuthorized(req)) {
+        return sendJson(res, 401, { ok: false, message: '未授权,请先登录' });
+      }
+      const raw = await readBody(req);
+      const payload = JSON.parse(raw || '{}');
+      const text = String(payload.text || '').trim();
+      if (!text) {
+        return sendJson(res, 400, { ok: false, message: '飘屏内容不能为空' });
+      }
+      const saved = setBroadcast(text);
       return sendJson(res, 200, { ok: true, data: saved });
     }
 

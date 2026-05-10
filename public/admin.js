@@ -46,10 +46,11 @@ const loginSubmitBtn = document.getElementById('loginSubmitBtn');
 async function apiSendBroadcast(text) {
   const res = await fetch('/api/broadcast', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: adminHeaders(),
     body: JSON.stringify({ text })
   });
   const json = await res.json();
+  if (res.status === 401) throw new Error(json.message || '登录已失效,请刷新页面重新输入密码');
   if (!json.ok) throw new Error(json.message || '发送飘屏失败');
   return json.data;
 }
