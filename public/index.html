@@ -52,39 +52,42 @@
         </div>
       </div>
 
-      <!-- 转动次数(只读显示)-->
-      <div class="spin-control-card" id="spinControlCard">
-        <div class="spin-control-head">
-          <h3>🎲 我的转动次数</h3>
-          <div class="spin-control-display" id="spinControlDisplay">
-            <span class="spin-control-num" id="spinControlNum">--</span>
-            <span class="spin-control-unit">次</span>
+      <!-- 转动次数 + 随机点名 桌面端并排,手机端堆叠 -->
+      <div class="side-by-side-row">
+        <!-- 转动次数(只读显示)-->
+        <div class="spin-control-card" id="spinControlCard">
+          <div class="spin-control-head">
+            <h3>🎲 我的转动次数</h3>
+            <div class="spin-control-display" id="spinControlDisplay">
+              <span class="spin-control-num" id="spinControlNum">--</span>
+              <span class="spin-control-unit">次</span>
+            </div>
+          </div>
+          <div class="spin-control-hint" id="spinControlHint">
+            每次点 START 消耗 1 次。次数用完后请联系主播补充。
+          </div>
+          <div class="spin-self-topup" id="spinSelfTopup" hidden>
+            <button class="primary-btn" id="spinSelfTopupBtn" type="button">🪙 自助加 <span id="spinSelfTopupAmount">5</span> 次</button>
+            <div class="spin-self-topup-hint" id="spinSelfTopupHint">本专属版本主播开放了玩家自助加次数</div>
           </div>
         </div>
-        <div class="spin-control-hint" id="spinControlHint">
-          每次点 START 消耗 1 次。次数用完后请联系主播补充。
-        </div>
-        <div class="spin-self-topup" id="spinSelfTopup" hidden>
-          <button class="primary-btn" id="spinSelfTopupBtn" type="button">🪙 自助加 <span id="spinSelfTopupAmount">5</span> 次</button>
-          <div class="spin-self-topup-hint" id="spinSelfTopupHint">本专属版本主播开放了玩家自助加次数</div>
-        </div>
-      </div>
 
-      <div class="picker-card">
-        <div class="picker-head">
-          <h3>🎲 随机点名</h3>
-          <div class="picker-people">
-            <label for="peopleCount">人数</label>
-            <button class="picker-step" id="peopleMinus" type="button">−</button>
-            <input type="number" id="peopleCount" min="1" max="50" value="3" />
-            <button class="picker-step" id="peoplePlus" type="button">+</button>
+        <div class="picker-card">
+          <div class="picker-head">
+            <h3>🎲 随机点名</h3>
+            <div class="picker-people">
+              <label for="peopleCount">人数</label>
+              <button class="picker-step" id="peopleMinus" type="button">−</button>
+              <input type="number" id="peopleCount" min="1" max="50" value="3" />
+              <button class="picker-step" id="peoplePlus" type="button">+</button>
+            </div>
           </div>
-        </div>
-        <div class="picker-body">
-          <div class="picker-result" id="pickerResult">
-            <span class="picker-tip">点下面按钮抽一个号</span>
+          <div class="picker-body">
+            <div class="picker-result" id="pickerResult">
+              <span class="picker-tip">点下面按钮抽一个号</span>
+            </div>
+            <button class="primary-btn picker-go" id="pickerGo" type="button">随机点名</button>
           </div>
-          <button class="primary-btn picker-go" id="pickerGo" type="button">随机点名</button>
         </div>
       </div>
 

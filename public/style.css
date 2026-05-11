@@ -1017,6 +1017,47 @@ body.modal-open { overflow: hidden; }
   cursor: not-allowed;
 }
 
+/* admin 创建专属页:每次加多少 内联控件 */
+.profile-amount-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+.profile-amount-inline input {
+  width: 56px;
+  padding: 6px 8px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, .18);
+  background: rgba(0, 0, 0, .3);
+  color: #fff;
+  text-align: center;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ===== 主界面双列布局(转动次数 + 随机点名 并排)===== */
+.side-by-side-row {
+  max-width: 920px;
+  margin: 16px auto 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  align-items: stretch;
+}
+.side-by-side-row > .spin-control-card,
+.side-by-side-row > .picker-card {
+  margin: 0; /* 由 row 控制间距 */
+  max-width: none;
+  width: 100%;
+}
+@media (max-width: 760px) {
+  .side-by-side-row {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+}
+
 /* ===== 主播控制:转动次数(主界面只读)===== */
 .spin-control-card {
   max-width: 920px;

@@ -167,12 +167,17 @@
 
         <h2 style="margin-top:22px;">🎁 专属定制版本</h2>
         <p class="hint" style="margin-top:0">为特定的朋友/客户生成专属 URL,他们打开后 banner 会显示自己的名字。可单独开启「玩家自助加次数」让他们点按钮自助补给。次数仍按 IP 隔离(同 v2.7.0)。</p>
-        <div class="row field" style="grid-template-columns: 1fr auto auto;">
+        <div class="row field" style="grid-template-columns: 1fr auto auto auto;">
           <input type="text" id="newProfileName" placeholder="输入名字,如「小明」" maxlength="32" />
           <label class="switch-row" style="margin:0;white-space:nowrap;">
             <span style="font-size:13px;">允许自助加</span>
             <input type="checkbox" id="newProfileAllowSelfTopup" checked />
           </label>
+          <div class="profile-amount-inline">
+            <span style="font-size:13px;color:var(--muted);">每次加</span>
+            <input type="number" id="newProfileAmount" min="1" max="50" step="1" value="5" />
+            <span style="font-size:13px;color:var(--muted);">次</span>
+          </div>
           <button class="primary-btn" id="createProfileBtn" type="button">✨ 一键生成</button>
         </div>
         <p class="hint" id="profileCreateHint" style="margin-top:6px;min-height:18px;"></p>

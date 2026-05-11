@@ -55,6 +55,7 @@ const ipTbody = document.getElementById('ipTbody');
 // 专属定制版本
 const newProfileName = document.getElementById('newProfileName');
 const newProfileAllowSelfTopup = document.getElementById('newProfileAllowSelfTopup');
+const newProfileAmount = document.getElementById('newProfileAmount');
 const createProfileBtn = document.getElementById('createProfileBtn');
 const profileCreateHint = document.getElementById('profileCreateHint');
 const profileTbody = document.getElementById('profileTbody');
@@ -369,7 +370,7 @@ async function createProfile() {
       body: JSON.stringify({
         name,
         allowSelfTopup: !!newProfileAllowSelfTopup?.checked,
-        selfTopupAmount: 5
+        selfTopupAmount: Math.max(1, Math.min(50, parseInt(newProfileAmount?.value) || 5))
       })
     });
     const json = await res.json();
