@@ -482,49 +482,52 @@ input[type="file"] { padding: 12px; }
     align-items: center;
   }
   /* nav-pill / status-pill / support-pill 三类小屏统一紧凑样式
-     用 inline-block + text-align 让 emoji+strong 同一行,.pill-label 单独一行 */
+     用 inline-block + text-align 让 emoji+strong 同一行,.pill-label 单独一行
+     emoji 行和 label 行用固定 line-height 强制对齐(避免「剩余 8」拉高一点导致下方文字错位)*/
   .nav-pill,
   .status-pill,
   .support-pill {
-    padding: 6px 10px 5px;
+    padding: 7px 10px 6px;
     font-size: 14px;
-    min-height: 50px;
-    min-width: 50px;
+    min-height: 52px;
+    min-width: 52px;
     display: inline-block;
     text-align: center;
-    line-height: 1.1;
+    line-height: 1;
     box-sizing: border-box;
+    border-radius: 14px;  /* 圆角方块,不再是纯圆 */
   }
   /* 隐藏完整文字标签 .pill-text(桌面用),小屏用紧凑的 .pill-label */
   .pill-text {
     display: none;
   }
-  /* emoji + 剩余 pill 的数字:inline 同一行 */
+  /* emoji + 剩余 pill 的数字:inline,同一行,固定 line-height 22 让 6 个 pill 第一行同高 */
   .pill-emoji {
     display: inline-block;
     font-size: 19px;
-    line-height: 1;
+    line-height: 22px;
     vertical-align: middle;
   }
   .spin-count-pill strong {
     display: inline-block;
     font-size: 13.5px;
+    line-height: 22px;
     margin-left: 3px;
     vertical-align: middle;
-    line-height: 1;
   }
-  /* "当前:主转盘" 的 strong("主转盘") 在小屏隐藏(mode-tabs 已显示模式)*/
+  /* "当前:主转盘" 的 strong("主转盘") 在小屏隐藏 */
   .status-pill:not(.spin-count-pill) strong {
     display: none;
   }
-  /* 2 字标签:block 换到下一行 */
+  /* 2 字标签:block 换到下一行;固定 line-height + margin-top 让 6 个 label 同高 */
   .pill-label {
     display: block;
     font-size: 10.5px;
+    line-height: 14px;
     font-weight: 700;
     opacity: .92;
     letter-spacing: 0.5px;
-    margin-top: 2px;
+    margin-top: 3px;
     white-space: nowrap;
   }
 }
