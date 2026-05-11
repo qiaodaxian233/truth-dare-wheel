@@ -75,6 +75,21 @@ body::before {
   align-items: center;
   gap: 14px;
   letter-spacing: .4px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.brand-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1 1 auto;
+  gap: 4px;
+}
+.brand-title-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 .logo {
   width: 52px;
@@ -454,11 +469,78 @@ input[type="file"] { padding: 12px; }
   .top-actions { justify-content: flex-start; }
   .admin-layout { grid-template-columns: 1fr; }
 }
-/* 平板/小窗口 */
+/* 平板/小窗口 —— 切换到紧凑图标模式 */
 @media (max-width: 760px) {
   /* 同时限制宽度(86vw)和高度(60vh),避免转盘吃光竖向空间 */
   .wheel-wrap { width: min(86vw, 60vh, 560px); }
   .quick-controls { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+  /* 上方所有 pill 改为紧凑图标:文字隐藏,emoji + 关键数字保留 */
+  .top-actions {
+    width: auto;
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: flex-start;
+  }
+  .nav-pill,
+  .status-pill {
+    padding: 8px 12px;
+    font-size: 14px;
+    min-height: 38px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .nav-pill .pill-text,
+  .status-pill .pill-text {
+    display: none;
+  }
+  .pill-emoji {
+    font-size: 16px;
+    line-height: 1;
+  }
+
+  /* 标题旁边的支持按钮:小屏也变图标 */
+  .support-top {
+    display: flex;
+    flex-direction: row;
+    gap: 6px;
+    width: auto;
+    padding: 0;
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    margin-left: auto;
+  }
+  .support-pill {
+    min-height: 36px;
+    min-width: 40px;
+    padding: 7px 10px;
+    font-size: 14px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+  }
+  .support-pill .pill-text {
+    display: none;
+  }
+  .support-pill .pill-emoji {
+    font-size: 17px;
+  }
+
+  /* 标题行:标题靠左、支持按钮靠右 */
+  .brand-title-row {
+    width: 100%;
+    justify-content: space-between;
+    flex-wrap: nowrap;
+  }
+  h1 {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
 }
 /* 手机 */
 @media (max-width: 560px) {
@@ -473,6 +555,16 @@ input[type="file"] { padding: 12px; }
   #resultTip { font-size: 12px; }
   .row, .count-box { grid-template-columns: 1fr; }
   .quick-controls { grid-template-columns: 1fr 1fr; }
+
+  /* 更窄时:logo 缩小 */
+  .logo { width: 42px; height: 42px; border-radius: 14px; font-size: 14px; }
+  h1 { font-size: 22px; }
+  .subtitle { font-size: 12px; }
+
+  /* pill 再紧凑 */
+  .nav-pill, .status-pill { padding: 7px 10px; min-height: 34px; }
+  .support-pill { min-height: 32px; min-width: 36px; padding: 6px 9px; }
+  .support-pill .pill-emoji { font-size: 16px; }
 }
 /* 极矮屏(横屏手机)再加一道保险 */
 @media (max-height: 700px) and (max-width: 900px) {
@@ -647,13 +739,6 @@ body.modal-open { overflow: hidden; }
 
 /* More comfortable mobile layout */
 @media (max-width: 560px) {
-  h1 { font-size: 24px; }
-  .logo { width: 46px; height: 46px; border-radius: 15px; }
-  .top-actions { width: 100%; display: grid; grid-template-columns: 1fr; }
-  .status-pill, .nav-pill { text-align: center; padding: 10px 12px; }
-  .support-top { width: 100%; display: grid; grid-template-columns: 1fr 1fr; border-radius: 24px; padding: 8px; gap: 8px; }
-  .support-pill { min-height: 42px; padding: 9px 10px; font-size: 14px; }
-  .mail-home { grid-column: 1 / -1; }
   .mode-tabs { gap: 8px; }
   .tab { flex: 1 1 auto; padding: 9px 10px; font-size: 14px; }
   .stage-footer { min-height: 70px; padding: 0 6px; }

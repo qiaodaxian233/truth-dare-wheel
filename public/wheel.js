@@ -1,3 +1,5 @@
+const WHEEL_SAMPLE_SIZE = 10;  // 真心话/大冒险大转盘每轮最多显示的题数;题库超过这个数会按权重无放回抽样
+
 const state = {
   mode: 'main',
   angle: 0,
@@ -5,6 +7,8 @@ const state = {
   dataHash: '',
   cacheKey: '',
   cacheImage: null,
+  // 当前显示在大转盘上的抽样池(仅 truth/dare 用;main 直接读 state.data.main)
+  wheelPool: { mode: '', items: [] },
   soundEnabled: localStorage.getItem('wheelSoundEnabled') !== '0',
   sound: {
     ctx: null,
@@ -344,7 +348,13 @@ async function loadServerData(silent = false) {
     // 应用专属定制版本(banner + 自助加按钮)
     applyProfile();
 
-    if (changed) invalidateWheelCache();
+    if (changed) {
+      invalidateWheelCache();
+      // 题库变了:如果当前在 truth/dare,重抽池子(可能有新题加入或权重调整);主转盘不受影响
+      if (state.mode === 'truth' || state.mode === 'dare') {
+        refreshWheelPool();
+      }
+    }
     resizeCanvasIfNeeded();
     drawWheel();
     if (!silent) showToast(changed ? '转盘数据已同步' : '数据没有变化');
@@ -365,8 +375,52 @@ function dataSignature(data) {
 }
 
 function getSegments() {
+  // 主转盘永远用完整 main 数据(就 2 项,不需要抽样)
+  if (state.mode === 'main') {
+    const list = state.data.main || [];
+    return list.length ? list : ['暂无数据,请到导入控制台添加'];
+  }
+  // 真心话/大冒险:用抽样池;若 pool 未初始化或模式不匹配,临时回退到完整题库(下次 refresh 会修正)
+  if (state.wheelPool.mode === state.mode && state.wheelPool.items.length) {
+    return state.wheelPool.items;
+  }
   const list = state.data[state.mode] || [];
   return list.length ? list : ['暂无数据,请到导入控制台添加'];
+}
+
+// 按权重无放回抽样 k 个;返回的元素保持在原数组中的相对顺序(视觉稳定)
+function sampleByWeight(items, k) {
+  if (!Array.isArray(items) || items.length === 0) return [];
+  if (items.length <= k) return items.slice();
+  const pool = items.map((item, idx) => ({ item, idx, w: itemWeight(item) }));
+  const picked = [];
+  for (let n = 0; n < k && pool.length; n++) {
+    const total = pool.reduce((a, b) => a + (b.w > 0 ? b.w : 0.0001), 0);
+    let r = Math.random() * total;
+    let chosen = pool.length - 1;
+    for (let i = 0; i < pool.length; i++) {
+      r -= pool[i].w > 0 ? pool[i].w : 0.0001;
+      if (r < 0) { chosen = i; break; }
+    }
+    picked.push(pool[chosen]);
+    pool.splice(chosen, 1);
+  }
+  picked.sort((a, b) => a.idx - b.idx);
+  return picked.map(p => p.item);
+}
+
+// 重抽当前大转盘的显示池;仅 truth/dare 模式有效。主转盘不需要(只有 2 项)
+function refreshWheelPool() {
+  if (state.mode !== 'truth' && state.mode !== 'dare') {
+    state.wheelPool = { mode: '', items: [] };
+    return;
+  }
+  const list = state.data[state.mode] || [];
+  state.wheelPool = {
+    mode: state.mode,
+    items: sampleByWeight(list, WHEEL_SAMPLE_SIZE)
+  };
+  invalidateWheelCache();
 }
 function labelOf(item) {
   if (typeof item === 'string') return item;
@@ -387,14 +441,21 @@ function pickWeightedIndex(segments) {
   return segments.length - 1;
 }
 
-// 计算每个扇区的角度(按权重),返回 [{start, end, mid, weight}]
+// 计算每个扇区的角度,返回 [{start, end, mid, weight}]
+// 主转盘(main):扇区始终均分(视觉公平),但抽中概率仍按权重(pickWeightedIndex 决定 selectedIndex)
+// 真心话/大冒险大转盘:扇区按权重,权重越大扇区越大(题目权重高的更显眼)
 function computeArcs(segments) {
   const weights = segments.map(itemWeight);
-  const total = weights.reduce((a, b) => a + b, 0) || segments.length;
+  const useEqualAngles = state.mode === 'main';
+  const total = useEqualAngles
+    ? segments.length
+    : (weights.reduce((a, b) => a + b, 0) || segments.length);
   const arcs = [];
   let acc = 0;
   for (let i = 0; i < segments.length; i++) {
-    const portion = (weights[i] / total) * Math.PI * 2;
+    const portion = useEqualAngles
+      ? (Math.PI * 2) / segments.length
+      : (weights[i] / total) * Math.PI * 2;
     arcs.push({ start: acc, end: acc + portion, mid: acc + portion / 2, weight: weights[i] });
     acc += portion;
   }
@@ -695,8 +756,12 @@ function playFinishSound() {
 async function spin() {
   if (state.spinning) return;
   closeResultModal(false);
-  const segments = getSegments();
-  if (!segments.length || String(labelOf(segments[0])).startsWith('暂无数据')) {
+
+  // 先看当前模式的题库是否为空
+  const initialList = state.mode === 'main'
+    ? (state.data.main || [])
+    : (state.data[state.mode] || []);
+  if (!initialList.length) {
     showToast('这个转盘还没有数据,请到导入控制台添加。');
     return;
   }
@@ -717,6 +782,15 @@ async function spin() {
       console.warn('spin/start failed, allow continue:', err);
     }
   }
+
+  // 真心话/大冒险:每次转动前重新抽一组 10 道作为转盘内容(题库 ≤10 时全部用)
+  if (state.mode === 'truth' || state.mode === 'dare') {
+    refreshWheelPool();
+    drawWheel();  // 让玩家立刻看到新扇区,再开始转动
+  }
+
+  // 取当前转盘上实际的 segments(可能是抽样后的 10 道)
+  const segments = getSegments();
 
   state.spinning = true;
   spinBtn.disabled = true;
@@ -830,6 +904,7 @@ function setMode(mode) {
   closeResultModal(false);
   state.mode = mode;
   state.angle = 0;
+  refreshWheelPool();  // truth/dare 模式切入时抽一组 10 道作为转盘内容
   invalidateWheelCache();
   const names = { main: '主转盘', truth: '真心话转盘', dare: '大冒险转盘' };
   modeName.textContent = names[mode];

@@ -77,7 +77,7 @@
 
       <div class="admin-card">
         <h2>主转盘概率</h2>
-        <p class="hint" style="margin-top:0">控制主转盘"真心话 vs 大冒险"被抽中的概率。权重越大,扇区越大,抽中概率越高。</p>
+        <p class="hint" style="margin-top:0">控制主转盘"真心话 vs 大冒险"被抽中的概率。<b>玩家页扇区视觉始终对半分(看起来公平)</b>,但实际抽中概率按下方权重决定 —— 权重越大,抽中概率越高。下方百分比是真实抽中概率。</p>
         <div id="mainWeights" class="main-weights"></div>
         <div class="field">
           <button class="primary-btn" id="saveMainBtn">保存主转盘概率</button>
@@ -217,6 +217,7 @@
 
         <h2 id="previewTitle" style="margin-top:20px;">数据预览(可单条调权重)</h2>
         <p class="hint" style="margin-top:0">点击题目文字可<strong>直接编辑</strong>,按 Enter 或点别处自动保存,按 Esc 取消。右侧权重改完点"保存权重修改"。🗑 删除单条立即生效。</p>
+        <p class="hint" style="margin-top:0; color: #ffd76b;">💡 题库可以放几百道,玩家大转盘每次点 START 会<strong>按权重随机抽 10 道</strong>入轮盘 —— 题库越多越新鲜,权重越高越容易上轮盘也越容易被抽中。</p>
         <div class="row field" style="grid-template-columns: 1fr 1fr;">
           <button class="small-btn" id="saveWeightsBtn">保存权重修改</button>
           <button class="small-btn" id="resetWeightsBtn">全部重置为 1</button>
