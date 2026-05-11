@@ -52,6 +52,13 @@ const resetAllIpsBtn = document.getElementById('resetAllIpsBtn');
 const ipSummary = document.getElementById('ipSummary');
 const ipTbody = document.getElementById('ipTbody');
 
+// 专属定制版本
+const newProfileName = document.getElementById('newProfileName');
+const newProfileAllowSelfTopup = document.getElementById('newProfileAllowSelfTopup');
+const createProfileBtn = document.getElementById('createProfileBtn');
+const profileCreateHint = document.getElementById('profileCreateHint');
+const profileTbody = document.getElementById('profileTbody');
+
 // 登录遮罩相关
 const loginOverlay = document.getElementById('loginOverlay');
 const loginPasswordInput = document.getElementById('loginPasswordInput');
@@ -281,6 +288,180 @@ async function resetAllIps() {
   } catch (err) {
     showToast(err.message || '操作失败');
   }
+}
+
+// ===== 专属定制版本管理 =====
+
+async function loadProfileList(silent = false) {
+  try {
+    const res = await fetch('/api/admin/profiles', { headers: adminHeaders() });
+    const json = await res.json();
+    if (res.status === 401) throw new Error('登录已失效');
+    if (!json.ok) throw new Error(json.message || '获取列表失败');
+    renderProfileList(json.list || []);
+    if (!silent) showToast(`已加载 ${json.total} 个专属版本`);
+  } catch (err) {
+    showToast(err.message || '加载失败');
+  }
+}
+
+function renderProfileList(list) {
+  if (!profileTbody) return;
+  if (!list.length) {
+    profileTbody.innerHTML = '<tr><td colspan="6" class="ip-empty">还没有专属版本,在上方输入名字创建</td></tr>';
+    return;
+  }
+  const origin = location.origin;
+  profileTbody.innerHTML = '';
+  for (const p of list) {
+    const tr = document.createElement('tr');
+    const url = `${origin}/p/${p.slug}`;
+    tr.innerHTML = `
+      <td class="ip-cell" style="font-family:inherit;">${escapeHTML(p.name)}</td>
+      <td class="ip-cell">
+        <a href="${escapeHTML(url)}" target="_blank" rel="noopener" style="color:#9be7ff;">${escapeHTML(url)}</a>
+      </td>
+      <td>
+        <label class="switch-row" style="margin:0;">
+          <input type="checkbox" data-profile-toggle="${escapeHTML(p.slug)}" ${p.allowSelfTopup ? 'checked' : ''} />
+        </label>
+      </td>
+      <td>
+        <input type="number" class="profile-amount" data-profile-amount="${escapeHTML(p.slug)}" min="1" max="50" step="1" value="${Number(p.selfTopupAmount) || 5}" ${p.allowSelfTopup ? '' : 'disabled'} />
+      </td>
+      <td class="ip-time">${escapeHTML(formatRelativeTime(p.createdAt))}</td>
+      <td class="ip-actions">
+        <button class="small-btn" data-profile-copy="${escapeHTML(url)}">📋 复制 URL</button>
+        <button class="small-btn danger" data-profile-delete="${escapeHTML(p.slug)}" data-profile-name="${escapeHTML(p.name)}">删除</button>
+      </td>
+    `;
+    profileTbody.appendChild(tr);
+  }
+  // 绑定操作
+  profileTbody.querySelectorAll('[data-profile-toggle]').forEach(el => {
+    el.addEventListener('change', () => toggleProfileSelfTopup(el.dataset.profileToggle, el.checked));
+  });
+  profileTbody.querySelectorAll('[data-profile-amount]').forEach(el => {
+    el.addEventListener('change', () => updateProfileAmount(el.dataset.profileAmount, parseInt(el.value)));
+  });
+  profileTbody.querySelectorAll('[data-profile-copy]').forEach(btn => {
+    btn.addEventListener('click', () => copyToClipboard(btn.dataset.profileCopy));
+  });
+  profileTbody.querySelectorAll('[data-profile-delete]').forEach(btn => {
+    btn.addEventListener('click', () => deleteProfile(btn.dataset.profileDelete, btn.dataset.profileName));
+  });
+}
+
+async function createProfile() {
+  const name = (newProfileName?.value || '').trim();
+  if (!name) {
+    if (profileCreateHint) profileCreateHint.textContent = '⚠ 请输入名字';
+    newProfileName?.focus();
+    return;
+  }
+  createProfileBtn.disabled = true;
+  const original = createProfileBtn.textContent;
+  createProfileBtn.textContent = '生成中…';
+  try {
+    const res = await fetch('/api/admin/profile/create', {
+      method: 'POST',
+      headers: adminHeaders(),
+      body: JSON.stringify({
+        name,
+        allowSelfTopup: !!newProfileAllowSelfTopup?.checked,
+        selfTopupAmount: 5
+      })
+    });
+    const json = await res.json();
+    if (!json.ok) throw new Error(json.message || '创建失败');
+    const url = `${location.origin}/p/${json.profile.slug}`;
+    if (profileCreateHint) {
+      profileCreateHint.innerHTML = `✅ 已生成,URL:<a href="${escapeHTML(url)}" target="_blank" rel="noopener" style="color:#9be7ff;">${escapeHTML(url)}</a> <button class="small-btn" style="margin-left:8px;" id="postCreateCopy">📋 复制</button>`;
+      const copyBtn = document.getElementById('postCreateCopy');
+      if (copyBtn) copyBtn.addEventListener('click', () => copyToClipboard(url));
+    }
+    if (newProfileName) newProfileName.value = '';
+    loadProfileList(true);
+    showToast(`「${name}」专属版本已创建`);
+  } catch (err) {
+    if (profileCreateHint) profileCreateHint.textContent = '⚠ ' + (err.message || '创建失败');
+  } finally {
+    createProfileBtn.disabled = false;
+    createProfileBtn.textContent = original;
+  }
+}
+
+async function toggleProfileSelfTopup(slug, allowSelfTopup) {
+  try {
+    const res = await fetch('/api/admin/profile/update', {
+      method: 'POST',
+      headers: adminHeaders(),
+      body: JSON.stringify({ slug, allowSelfTopup })
+    });
+    const json = await res.json();
+    if (!json.ok) throw new Error(json.message || '更新失败');
+    showToast(allowSelfTopup ? '已开启自助加' : '已关闭自助加');
+    loadProfileList(true);
+  } catch (err) {
+    showToast(err.message || '更新失败');
+    loadProfileList(true);
+  }
+}
+
+async function updateProfileAmount(slug, amount) {
+  const v = Math.max(1, Math.min(50, Math.floor(Number(amount) || 5)));
+  try {
+    const res = await fetch('/api/admin/profile/update', {
+      method: 'POST',
+      headers: adminHeaders(),
+      body: JSON.stringify({ slug, selfTopupAmount: v })
+    });
+    const json = await res.json();
+    if (!json.ok) throw new Error(json.message || '更新失败');
+    showToast(`每次加次数已改为 ${v}`);
+  } catch (err) {
+    showToast(err.message || '更新失败');
+  }
+}
+
+async function deleteProfile(slug, name) {
+  if (!confirm(`删除专属版本「${name}」?\n\n该 URL 后续会失效,玩家访问会看到提示信息。`)) return;
+  try {
+    const res = await fetch('/api/admin/profile/delete', {
+      method: 'POST',
+      headers: adminHeaders(),
+      body: JSON.stringify({ slug })
+    });
+    const json = await res.json();
+    if (!json.ok) throw new Error(json.message || '删除失败');
+    showToast(`「${name}」已删除`);
+    loadProfileList(true);
+  } catch (err) {
+    showToast(err.message || '删除失败');
+  }
+}
+
+function copyToClipboard(text) {
+  if (!text) return;
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(
+      () => showToast('已复制到剪贴板'),
+      () => fallbackCopy(text)
+    );
+  } else {
+    fallbackCopy(text);
+  }
+}
+function fallbackCopy(text) {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed';
+  ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.select();
+  try { document.execCommand('copy'); showToast('已复制'); }
+  catch (_) { showToast('请手动复制:' + text.slice(0, 40) + '…'); }
+  document.body.removeChild(ta);
 }
 
 function renderCounts() {
@@ -632,6 +813,14 @@ if (saveSpinSettingsBtn) saveSpinSettingsBtn.addEventListener('click', saveSpinS
 if (refreshIpsBtn) refreshIpsBtn.addEventListener('click', () => loadIpList());
 if (resetAllIpsBtn) resetAllIpsBtn.addEventListener('click', resetAllIps);
 
+// 专属定制
+if (createProfileBtn) createProfileBtn.addEventListener('click', createProfile);
+if (newProfileName) {
+  newProfileName.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); createProfile(); }
+  });
+}
+
 // 登录遮罩
 if (loginSubmitBtn) loginSubmitBtn.addEventListener('click', handleLoginSubmit);
 if (loginPasswordInput) {
@@ -678,6 +867,7 @@ async function handleLoginSubmit() {
     await loadData(true);
     await refreshPasswordStatus();
     loadIpList(true).catch(() => {});
+    loadProfileList(true).catch(() => {});
     showToast('登录成功');
   } catch (err) {
     if (loginError) loginError.textContent = err.message || '密码不正确';
@@ -746,6 +936,7 @@ async function bootstrap() {
           await loadData(true);
           await refreshPasswordStatus();
           loadIpList(true).catch(() => {});
+          loadProfileList(true).catch(() => {});
           return;
         }
       } catch (_) {
@@ -758,5 +949,6 @@ async function bootstrap() {
     await loadData(true);
     await refreshPasswordStatus();
     loadIpList(true).catch(() => {});
+    loadProfileList(true).catch(() => {});
   }
 }

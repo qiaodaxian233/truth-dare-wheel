@@ -62,6 +62,19 @@ const spinControlCard = document.getElementById('spinControlCard');
 const spinControlNum = document.getElementById('spinControlNum');
 const spinControlHint = document.getElementById('spinControlHint');
 
+// 专属定制版本
+const profileBadge = document.getElementById('profileBadge');
+const profileBadgeName = document.getElementById('profileBadgeName');
+const brandSubtitle = document.getElementById('brandSubtitle');
+const spinSelfTopup = document.getElementById('spinSelfTopup');
+const spinSelfTopupBtn = document.getElementById('spinSelfTopupBtn');
+const spinSelfTopupAmount = document.getElementById('spinSelfTopupAmount');
+const spinSelfTopupHint = document.getElementById('spinSelfTopupHint');
+
+// 当前页面专属 slug(从 URL 解析)
+const URL_PROFILE_MATCH = location.pathname.match(/^\/p\/([a-zA-Z0-9_-]{2,32})/);
+const CURRENT_PROFILE_SLUG = URL_PROFILE_MATCH ? URL_PROFILE_MATCH[1] : null;
+
 const palette = [
   ['#31f7ff', '#0ea5e9'], ['#ff3cf0', '#a855f7'], ['#ffd166', '#fb923c'],
   ['#34d399', '#10b981'], ['#f472b6', '#e11d48'], ['#a78bfa', '#6366f1'],
@@ -106,6 +119,104 @@ function updateSpinCountDisplay(info) {
   }
   if (resultTip && isMain && noSpinsLeft && !state.spinning) {
     resultTip.textContent = '⚠ 转动次数已用完,请联系主播补充';
+  }
+}
+
+// ===== 专属定制版本 =====
+// 专属页信息缓存(避免每次轮询都重新拉);失效时清掉
+let currentProfile = null;
+let profileLoadedForSlug = null;
+
+async function applyProfile() {
+  // 没 slug → 隐藏 badge / 自助加按钮
+  if (!CURRENT_PROFILE_SLUG) {
+    if (profileBadge) profileBadge.hidden = true;
+    if (spinSelfTopup) spinSelfTopup.hidden = true;
+    return;
+  }
+  // 已经拉过这个 slug 就直接用缓存
+  if (profileLoadedForSlug === CURRENT_PROFILE_SLUG) {
+    return applyProfileToUI(currentProfile);
+  }
+  // 异步拉单个 profile(服务端不再整体暴露 profiles 列表)
+  try {
+    const res = await fetch(`/api/profile/get?slug=${encodeURIComponent(CURRENT_PROFILE_SLUG)}`, { cache: 'no-store' });
+    if (res.status === 404) {
+      currentProfile = null;
+    } else {
+      const json = await res.json();
+      currentProfile = json.ok ? json.profile : null;
+    }
+    profileLoadedForSlug = CURRENT_PROFILE_SLUG;
+    applyProfileToUI(currentProfile);
+  } catch (err) {
+    console.warn('profile fetch failed:', err);
+    currentProfile = null;
+    profileLoadedForSlug = CURRENT_PROFILE_SLUG;
+    applyProfileToUI(null);
+  }
+}
+
+function applyProfileToUI(p) {
+  if (!p) {
+    // slug 在 URL 里但服务器上不存在(被删了 / 瞎填的)
+    if (profileBadge) {
+      profileBadge.hidden = false;
+      profileBadge.classList.add('is-invalid');
+      if (profileBadgeName) profileBadgeName.textContent = '专属版本无效';
+    }
+    if (brandSubtitle) brandSubtitle.textContent = '⚠ 这个专属 URL 已失效,请联系主播获取新链接';
+    if (spinSelfTopup) spinSelfTopup.hidden = true;
+    return;
+  }
+  // 有效 profile
+  if (profileBadge) {
+    profileBadge.hidden = false;
+    profileBadge.classList.remove('is-invalid');
+    if (profileBadgeName) profileBadgeName.textContent = p.name;
+  }
+  // 顶部大标题改成「XX 专属」
+  const pageTitle = document.getElementById('pageTitle');
+  if (pageTitle) pageTitle.textContent = `${p.name} 专属`;
+  document.title = `${p.name} 专属|炫酷转盘`;
+  if (brandSubtitle) brandSubtitle.textContent = `🎁 ${p.name} 的专属定制版本 · 尽情享受`;
+  // 自助加按钮
+  if (spinSelfTopup) {
+    if (p.allowSelfTopup) {
+      spinSelfTopup.hidden = false;
+      if (spinSelfTopupAmount) spinSelfTopupAmount.textContent = String(p.selfTopupAmount || 5);
+      if (spinSelfTopupHint) spinSelfTopupHint.textContent = `主播为 ${p.name} 开放了自助加次数`;
+    } else {
+      spinSelfTopup.hidden = true;
+    }
+  }
+}
+
+async function submitSelfTopup() {
+  if (!CURRENT_PROFILE_SLUG) return;
+  if (!spinSelfTopupBtn) return;
+  spinSelfTopupBtn.disabled = true;
+  const original = spinSelfTopupBtn.textContent;
+  spinSelfTopupBtn.textContent = '处理中…';
+  try {
+    const res = await fetch('/api/profile/topup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ slug: CURRENT_PROFILE_SLUG })
+    });
+    const json = await res.json();
+    if (!json.ok) throw new Error(json.message || '加次数失败');
+    // 同步显示
+    if (state.data && state.data.settings) {
+      state.data.settings.spinCount = json.remaining;
+    }
+    updateSpinCountDisplay({ remaining: json.remaining });
+    showToast(`🪙 已加 ${json.added} 次,当前剩余 ${json.remaining}`);
+  } catch (err) {
+    showToast(err.message || '加次数失败');
+  } finally {
+    spinSelfTopupBtn.disabled = false;
+    spinSelfTopupBtn.textContent = original;
   }
 }
 
@@ -198,6 +309,9 @@ async function loadServerData(silent = false) {
       remaining: Number(state.data.settings.spinCount) || 0,
       unlimited: !!state.data.settings.spinUnlimited
     });
+
+    // 应用专属定制版本(banner + 自助加按钮)
+    applyProfile();
 
     if (changed) invalidateWheelCache();
     resizeCanvasIfNeeded();
@@ -843,6 +957,9 @@ updateSoundToggle();
 // 猜左右按钮
 if (guessLeftBtn) guessLeftBtn.addEventListener('click', () => submitGuess('left'));
 if (guessRightBtn) guessRightBtn.addEventListener('click', () => submitGuess('right'));
+
+// 专属版本:自助加次数
+if (spinSelfTopupBtn) spinSelfTopupBtn.addEventListener('click', submitSelfTopup);
 closeModal.addEventListener('click', () => closeResultModal());
 resultModal.addEventListener('click', (event) => {
   if (event.target && event.target.hasAttribute('data-close-modal')) closeResultModal();

@@ -165,6 +165,35 @@
           </table>
         </div>
 
+        <h2 style="margin-top:22px;">🎁 专属定制版本</h2>
+        <p class="hint" style="margin-top:0">为特定的朋友/客户生成专属 URL,他们打开后 banner 会显示自己的名字。可单独开启「玩家自助加次数」让他们点按钮自助补给。次数仍按 IP 隔离(同 v2.7.0)。</p>
+        <div class="row field" style="grid-template-columns: 1fr auto auto;">
+          <input type="text" id="newProfileName" placeholder="输入名字,如「小明」" maxlength="32" />
+          <label class="switch-row" style="margin:0;white-space:nowrap;">
+            <span style="font-size:13px;">允许自助加</span>
+            <input type="checkbox" id="newProfileAllowSelfTopup" checked />
+          </label>
+          <button class="primary-btn" id="createProfileBtn" type="button">✨ 一键生成</button>
+        </div>
+        <p class="hint" id="profileCreateHint" style="margin-top:6px;min-height:18px;"></p>
+        <div class="ip-table-wrap">
+          <table class="ip-table" id="profileTable">
+            <thead>
+              <tr>
+                <th>名字</th>
+                <th>专属 URL</th>
+                <th>自助加</th>
+                <th>每次加</th>
+                <th>创建</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody id="profileTbody">
+              <tr><td colspan="6" class="ip-empty">还没有专属版本,在上方输入名字创建</td></tr>
+            </tbody>
+          </table>
+        </div>
+
         <div class="count-box">
           <div class="count-item"><b id="countMain">2</b><span>主转盘</span></div>
           <div class="count-item"><b id="countTruth">0</b><span>真心话</span></div>

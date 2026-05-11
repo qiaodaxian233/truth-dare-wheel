@@ -68,8 +68,10 @@ const defaultData = {
   },
   broadcast: { id: 0, text: '', createdAt: 0 },
   // ===== 按 IP 隔离的转动次数池 =====
-  // key = IP 字符串, value = { count, lastActive(ms) }
-  spinByIp: {}
+  spinByIp: {},
+  // ===== 专属定制版本 =====
+  // key = slug(URL 段), value = { name, slug, allowSelfTopup, selfTopupAmount, createdAt }
+  profiles: {}
 };
 
 const mimeTypes = {
@@ -174,6 +176,24 @@ function normalizeData(input) {
     };
   }
 
+  // profiles 校验:key 必须是 [a-z0-9_-]{2,32},value 是 {name, slug, allowSelfTopup, selfTopupAmount, createdAt}
+  const rawProfiles = src.profiles && typeof src.profiles === 'object' ? src.profiles : {};
+  const profiles = {};
+  for (const [slug, p] of Object.entries(rawProfiles)) {
+    if (!slug || typeof slug !== 'string') continue;
+    if (!/^[a-zA-Z0-9_-]{2,32}$/.test(slug)) continue;
+    const entry = p && typeof p === 'object' ? p : {};
+    const name = String(entry.name || '').trim().slice(0, 32);
+    if (!name) continue;
+    profiles[slug] = {
+      name,
+      slug,
+      allowSelfTopup: !!entry.allowSelfTopup,
+      selfTopupAmount: Math.max(1, Math.min(50, Math.floor(num(entry.selfTopupAmount, 5, 1, 50)))),
+      createdAt: Math.max(0, Math.floor(num(entry.createdAt, Date.now(), 0, Number.MAX_SAFE_INTEGER)))
+    };
+  }
+
   return {
     main: normalizeMain(src.main),
     truth: normalizeList(src.truth && src.truth.length ? src.truth : defaultData.truth),
@@ -195,7 +215,8 @@ function normalizeData(input) {
       text: String(broadcastIn.text || '').slice(0, 200),
       createdAt: Number(broadcastIn.createdAt) || 0
     },
-    spinByIp
+    spinByIp,
+    profiles
   };
 }
 
@@ -209,8 +230,8 @@ function readDataInternal() {
   }
 }
 
-// 对外读取(剥离 adminPassword + spinByIp,注入当前 IP 的剩余次数)
-// 玩家页拿到的 settings.spinCount 是【自己 IP】的剩余,其它 IP 的数据不暴露
+// 对外读取(剥离 adminPassword + spinByIp + profiles,注入当前 IP 的剩余次数)
+// profiles 不整体暴露(隐私 + 防探测),玩家页通过 /api/profile/get?slug=xxx 单独查询
 function readDataPublic(clientIp) {
   const d = readDataInternal();
   if (d.settings) {
@@ -223,23 +244,39 @@ function readDataPublic(clientIp) {
       : Math.max(0, Math.floor(Number(d.settings.spinCountDefault) || 0));
   }
   delete d.spinByIp;
+  delete d.profiles;
   return d;
 }
 
-// 管理员保存:能改 main/truth/dare/settings(但不能通过此接口改密码 / spinByIp)
+// 单个专属页查询(玩家页用,只返回必要的公开字段)
+function getProfilePublic(slug) {
+  if (!slug) return null;
+  const d = readDataInternal();
+  const p = d.profiles && d.profiles[slug];
+  if (!p) return null;
+  return {
+    slug: p.slug,
+    name: p.name,
+    allowSelfTopup: !!p.allowSelfTopup,
+    selfTopupAmount: Number(p.selfTopupAmount) || 5
+  };
+}
+
+// 管理员保存:能改 main/truth/dare/settings(但不能通过此接口改密码 / spinByIp / profiles)
 function writeDataInternal(newData) {
   ensureDataFile();
   const existing = readDataInternal();
   const normalized = normalizeData(newData);
-  // 始终保留磁盘上原有的密码 + spinByIp,这两个有专用接口修改
+  // 始终保留磁盘上原有的密码 + spinByIp + profiles,这些有专用接口修改
   normalized.settings.adminPassword = existing.settings.adminPassword || '';
   normalized.spinByIp = existing.spinByIp || {};
+  normalized.profiles = existing.profiles || {};
   fs.writeFileSync(DATA_FILE, JSON.stringify(normalized, null, 2), 'utf8');
-  // 返回对外版(剥离密码 + spinByIp)
+  // 返回对外版(剥离密码 + spinByIp + profiles)
   const out = JSON.parse(JSON.stringify(normalized));
   if (out.settings) delete out.settings.adminPassword;
   delete out.spinByIp;
-  // admin 拿到的不需要注入 spinCount(他们看 spinCountDefault 即可)
+  delete out.profiles;
   return out;
 }
 
@@ -264,7 +301,8 @@ function writePlayerSafe(newData, clientIp) {
     dare: existing.dare,
     settings: mergedSettings,
     broadcast: existing.broadcast || { id: 0, text: '', createdAt: 0 },
-    spinByIp: existing.spinByIp || {}
+    spinByIp: existing.spinByIp || {},
+    profiles: existing.profiles || {}
   };
   fs.writeFileSync(DATA_FILE, JSON.stringify(merged, null, 2), 'utf8');
   // 返回时构造对外版(注入当前 IP 的 spinCount,剥离密码/spinByIp)
@@ -275,6 +313,7 @@ function writePlayerSafe(newData, clientIp) {
     ? ipEntry.count
     : Math.max(0, Math.floor(Number(out.settings.spinCountDefault) || 0));
   delete out.spinByIp;
+  delete out.profiles;
   return out;
 }
 
@@ -454,6 +493,101 @@ function deleteAllIps() {
   existing.spinByIp = {};
   fs.writeFileSync(DATA_FILE, JSON.stringify(existing, null, 2), 'utf8');
   return { ok: true };
+}
+
+// ===== Admin: 专属定制版本管理 =====
+
+function generateSlug(existing) {
+  // 6 位 [a-z0-9] 随机,冲突就重试
+  for (let i = 0; i < 20; i++) {
+    const s = Math.random().toString(36).slice(2, 8).replace(/[^a-z0-9]/g, 'x');
+    if (s.length === 6 && !existing[s]) return s;
+  }
+  // 极端情况兜底
+  return 'p' + Date.now().toString(36).slice(-5);
+}
+
+function listProfiles() {
+  const d = readDataInternal();
+  const list = Object.values(d.profiles || {}).sort((a, b) => b.createdAt - a.createdAt);
+  return { ok: true, total: list.length, list };
+}
+
+function createProfile(payload) {
+  const name = String(payload?.name || '').trim().slice(0, 32);
+  if (!name) return { ok: false, message: '名字不能为空' };
+  let slug = String(payload?.slug || '').trim();
+  ensureDataFile();
+  const existing = readDataInternal();
+  if (!existing.profiles) existing.profiles = {};
+  // slug 校验或自动生成
+  if (slug) {
+    if (!/^[a-zA-Z0-9_-]{2,32}$/.test(slug)) {
+      return { ok: false, message: 'slug 只能含字母数字和 _-, 2-32 位' };
+    }
+    if (existing.profiles[slug]) return { ok: false, message: '该 URL 标识已存在' };
+  } else {
+    slug = generateSlug(existing.profiles);
+  }
+  const profile = {
+    name,
+    slug,
+    allowSelfTopup: !!payload?.allowSelfTopup,
+    selfTopupAmount: Math.max(1, Math.min(50, Math.floor(Number(payload?.selfTopupAmount) || 5))),
+    createdAt: Date.now()
+  };
+  existing.profiles[slug] = profile;
+  fs.writeFileSync(DATA_FILE, JSON.stringify(existing, null, 2), 'utf8');
+  return { ok: true, profile };
+}
+
+function updateProfile(payload) {
+  const slug = String(payload?.slug || '').trim();
+  if (!slug) return { ok: false, message: 'slug 不能为空' };
+  ensureDataFile();
+  const existing = readDataInternal();
+  if (!existing.profiles || !existing.profiles[slug]) {
+    return { ok: false, message: '专属版本不存在' };
+  }
+  const p = existing.profiles[slug];
+  if (typeof payload.name === 'string') {
+    const name = payload.name.trim().slice(0, 32);
+    if (name) p.name = name;
+  }
+  if ('allowSelfTopup' in payload) p.allowSelfTopup = !!payload.allowSelfTopup;
+  if ('selfTopupAmount' in payload) {
+    p.selfTopupAmount = Math.max(1, Math.min(50, Math.floor(Number(payload.selfTopupAmount) || 5)));
+  }
+  fs.writeFileSync(DATA_FILE, JSON.stringify(existing, null, 2), 'utf8');
+  return { ok: true, profile: p };
+}
+
+function deleteProfile(slug) {
+  if (!slug) return { ok: false, message: 'slug 不能为空' };
+  ensureDataFile();
+  const existing = readDataInternal();
+  if (existing.profiles && existing.profiles[slug]) {
+    delete existing.profiles[slug];
+    fs.writeFileSync(DATA_FILE, JSON.stringify(existing, null, 2), 'utf8');
+  }
+  return { ok: true };
+}
+
+// 玩家通过专属页面自助加次数(允许时)
+// 返回 { ok, remaining, added }
+function profileSelfTopup(slug, ip) {
+  if (!slug || !ip) return { ok: false, message: '参数不完整' };
+  ensureDataFile();
+  const existing = readDataInternal();
+  const p = existing.profiles && existing.profiles[slug];
+  if (!p) return { ok: false, message: '专属版本不存在或已删除' };
+  if (!p.allowSelfTopup) return { ok: false, message: '此专属版本未开启「玩家自助加次数」' };
+  const add = Math.max(1, Math.min(50, Math.floor(Number(p.selfTopupAmount) || 5)));
+  const entry = ensureIpEntry(existing, ip);
+  entry.count = Math.max(0, Math.min(99999, entry.count + add));
+  entry.lastActive = Date.now();
+  fs.writeFileSync(DATA_FILE, JSON.stringify(existing, null, 2), 'utf8');
+  return { ok: true, remaining: entry.count, added: add };
 }
 
 function isAuthorized(req) {
@@ -652,6 +786,58 @@ const server = http.createServer(async (req, res) => {
         return sendJson(res, 401, { ok: false, message: '未授权,请先登录' });
       }
       return sendJson(res, 200, deleteAllIps());
+    }
+
+    // ===== Admin: 专属定制版本管理 =====
+    if (pathname === '/api/admin/profiles' && req.method === 'GET') {
+      if (!isAuthorized(req)) {
+        return sendJson(res, 401, { ok: false, message: '未授权,请先登录' });
+      }
+      return sendJson(res, 200, listProfiles());
+    }
+    if (pathname === '/api/admin/profile/create' && req.method === 'POST') {
+      if (!isAuthorized(req)) {
+        return sendJson(res, 401, { ok: false, message: '未授权,请先登录' });
+      }
+      const raw = await readBody(req);
+      const payload = JSON.parse(raw || '{}');
+      const result = createProfile(payload);
+      return sendJson(res, result.ok ? 200 : 400, result);
+    }
+    if (pathname === '/api/admin/profile/update' && req.method === 'POST') {
+      if (!isAuthorized(req)) {
+        return sendJson(res, 401, { ok: false, message: '未授权,请先登录' });
+      }
+      const raw = await readBody(req);
+      const payload = JSON.parse(raw || '{}');
+      const result = updateProfile(payload);
+      return sendJson(res, result.ok ? 200 : 400, result);
+    }
+    if (pathname === '/api/admin/profile/delete' && req.method === 'POST') {
+      if (!isAuthorized(req)) {
+        return sendJson(res, 401, { ok: false, message: '未授权,请先登录' });
+      }
+      const raw = await readBody(req);
+      const payload = JSON.parse(raw || '{}');
+      const result = deleteProfile(String(payload.slug || '').trim());
+      return sendJson(res, result.ok ? 200 : 400, result);
+    }
+
+    // ===== 玩家:专属版本自助加次数(无需鉴权,服务端校验 slug.allowSelfTopup)=====
+    if (pathname === '/api/profile/topup' && req.method === 'POST') {
+      const raw = await readBody(req);
+      const payload = JSON.parse(raw || '{}');
+      const result = profileSelfTopup(String(payload.slug || '').trim(), clientIp);
+      return sendJson(res, result.ok ? 200 : 400, result);
+    }
+
+    // ===== 玩家:查询单个专属页(无需鉴权,只返回必要公开字段)=====
+    if (pathname === '/api/profile/get' && req.method === 'GET') {
+      const url = new URL(req.url, 'http://localhost');
+      const slug = String(url.searchParams.get('slug') || '').trim();
+      const p = getProfilePublic(slug);
+      if (!p) return sendJson(res, 404, { ok: false, message: '专属页不存在或已删除' });
+      return sendJson(res, 200, { ok: true, profile: p });
     }
 
     return serveStatic(req, res);
