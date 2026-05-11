@@ -85,12 +85,6 @@ body::before {
   flex: 1 1 auto;
   gap: 4px;
 }
-.brand-title-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-}
 .logo {
   width: 52px;
   height: 52px;
@@ -475,71 +469,45 @@ input[type="file"] { padding: 12px; }
   .wheel-wrap { width: min(86vw, 60vh, 560px); }
   .quick-controls { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 
-  /* 上方所有 pill 改为紧凑图标:文字隐藏,emoji + 关键数字保留 */
+  /* topbar 上方所有 pill(6 个)挤在一排:文字隐藏,emoji + 必要数字保留 */
   .top-actions {
-    width: auto;
+    width: 100%;
     display: flex;
     flex-direction: row;
     flex-wrap: wrap;
     gap: 8px;
     justify-content: flex-start;
-  }
-  .nav-pill,
-  .status-pill {
-    padding: 8px 12px;
-    font-size: 14px;
-    min-height: 38px;
-    display: inline-flex;
     align-items: center;
-    gap: 4px;
   }
-  .nav-pill .pill-text,
-  .status-pill .pill-text {
-    display: none;
-  }
-  .pill-emoji {
-    font-size: 16px;
-    line-height: 1;
-  }
-
-  /* 标题旁边的支持按钮:小屏也变图标 */
-  .support-top {
-    display: flex;
-    flex-direction: row;
-    gap: 6px;
-    width: auto;
-    padding: 0;
-    background: transparent;
-    border: none;
-    border-radius: 0;
-    margin-left: auto;
-  }
+  /* nav-pill / status-pill / support-pill 三类小屏统一紧凑样式 */
+  .nav-pill,
+  .status-pill,
   .support-pill {
+    padding: 7px 11px;
+    font-size: 14px;
     min-height: 36px;
     min-width: 40px;
-    padding: 7px 10px;
-    font-size: 14px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 0;
+    gap: 4px;
   }
-  .support-pill .pill-text {
+  /* 隐藏所有 .pill-text(文字标签):只留 emoji + 必要数字 */
+  .pill-text {
     display: none;
   }
-  .support-pill .pill-emoji {
+  .pill-emoji {
     font-size: 17px;
+    line-height: 1;
   }
-
-  /* 标题行:标题靠左、支持按钮靠右 */
-  .brand-title-row {
-    width: 100%;
-    justify-content: space-between;
-    flex-wrap: nowrap;
+  /* "当前:主转盘" 的 strong("主转盘") 在小屏也隐藏 —— 下方 mode-tabs 已经清晰显示模式 */
+  .status-pill:not(.spin-count-pill) strong {
+    display: none;
   }
-  h1 {
-    flex: 1 1 auto;
-    min-width: 0;
+  /* "剩余" pill 的 strong(数字)必须保留可见 */
+  .spin-count-pill strong {
+    display: inline;
+    margin-left: 2px;
   }
 }
 /* 手机 */
@@ -561,10 +529,13 @@ input[type="file"] { padding: 12px; }
   h1 { font-size: 22px; }
   .subtitle { font-size: 12px; }
 
-  /* pill 再紧凑 */
-  .nav-pill, .status-pill { padding: 7px 10px; min-height: 34px; }
-  .support-pill { min-height: 32px; min-width: 36px; padding: 6px 9px; }
-  .support-pill .pill-emoji { font-size: 16px; }
+  /* pill 再紧凑(三类一起缩) */
+  .nav-pill, .status-pill, .support-pill {
+    padding: 6px 9px;
+    min-height: 32px;
+    min-width: 36px;
+  }
+  .pill-emoji { font-size: 16px; }
 }
 /* 极矮屏(横屏手机)再加一道保险 */
 @media (max-height: 700px) and (max-width: 900px) {
@@ -1080,6 +1051,32 @@ body.modal-open { overflow: hidden; }
   font-weight: 900;
 }
 .spin-self-topup-hint {
+  font-size: 12.5px;
+  color: var(--muted);
+  text-align: center;
+}
+
+/* ===== 玩家页「设置次数」(专属页独有) ===== */
+.spin-set-count {
+  margin-top: 10px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(49,247,255,.12), rgba(99,102,241,.10));
+  border: 1px solid rgba(49,247,255,.32);
+  display: grid;
+  gap: 6px;
+}
+.spin-set-count .ghost-btn {
+  background: linear-gradient(135deg, rgba(49,247,255,.85), rgba(99,102,241,.85));
+  border-color: rgba(49,247,255,.55);
+  color: #06121b;
+  font-weight: 900;
+}
+.spin-set-count .ghost-btn:hover {
+  background: linear-gradient(135deg, rgba(49,247,255,1), rgba(99,102,241,1));
+  border-color: rgba(49,247,255,.75);
+}
+.spin-set-count-hint {
   font-size: 12.5px;
   color: var(--muted);
   text-align: center;

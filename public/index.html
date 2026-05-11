@@ -12,24 +12,11 @@
       <div class="brand">
         <div class="logo">GO</div>
         <div class="brand-text">
-          <div class="brand-title-row">
-            <h1 id="pageTitle">真心话 · 大冒险<span class="profile-badge" id="profileBadge" hidden>🎁 <span id="profileBadgeName">--</span> 专属</span></h1>
-            <!-- 支持按钮:桌面端在右上角 top-actions 区,窄屏会贴在标题旁 -->
-            <div class="support-top" aria-label="作者主页和赞赏码">
-              <a class="support-pill author-home" href="https://v.douyin.com/R5E-sjGaqBY/" target="_blank" rel="noopener noreferrer" title="作者主页">
-                <span class="pill-emoji">👤</span><span class="pill-text">作者主页</span>
-              </a>
-              <button class="support-pill reward-btn" id="rewardOpen" type="button" title="赞赏码">
-                <span class="pill-emoji">💛</span><span class="pill-text">赞赏码</span>
-              </button>
-              <a class="support-pill mail-home" href="mailto:752522616@qq.com" title="作者邮箱">
-                <span class="pill-emoji">✉️</span><span class="pill-text">作者邮箱</span>
-              </a>
-            </div>
-          </div>
+          <h1 id="pageTitle">真心话 · 大冒险<span class="profile-badge" id="profileBadge" hidden>🎁 <span id="profileBadgeName">--</span> 专属</span></h1>
           <div class="subtitle" id="brandSubtitle">玩家页:题库很多也流畅;完整结果会全屏弹窗显示</div>
         </div>
       </div>
+      <!-- 所有 pill 一排:控制台 + 模式 + 剩余 + 作者 + 赞赏 + 邮箱(小屏全部缩成图标) -->
       <div class="top-actions">
         <a class="nav-pill" href="/admin.html" title="进入导入控制台">
           <span class="pill-emoji">📥</span><span class="pill-text">进入导入控制台</span>
@@ -40,6 +27,15 @@
         <div class="status-pill spin-count-pill" id="spinCountPill" hidden title="剩余转动次数">
           <span class="pill-emoji">🎲</span><span class="pill-text">剩余:</span><strong id="spinCountValue">--</strong><span class="spin-unlimited-badge" id="spinUnlimitedBadge" hidden>♾ 无限</span>
         </div>
+        <a class="support-pill author-home" href="https://v.douyin.com/R5E-sjGaqBY/" target="_blank" rel="noopener noreferrer" title="作者主页">
+          <span class="pill-emoji">👤</span><span class="pill-text">作者主页</span>
+        </a>
+        <button class="support-pill reward-btn" id="rewardOpen" type="button" title="赞赏码">
+          <span class="pill-emoji">💛</span><span class="pill-text">赞赏码</span>
+        </button>
+        <a class="support-pill mail-home" href="mailto:752522616@qq.com" title="作者邮箱">
+          <span class="pill-emoji">✉️</span><span class="pill-text">作者邮箱</span>
+        </a>
       </div>
     </header>
 
@@ -82,6 +78,11 @@
           <div class="spin-self-topup" id="spinSelfTopup" hidden>
             <button class="primary-btn" id="spinSelfTopupBtn" type="button">🪙 自助加 <span id="spinSelfTopupAmount">5</span> 次</button>
             <div class="spin-self-topup-hint" id="spinSelfTopupHint">本专属版本主播开放了玩家自助加次数</div>
+          </div>
+          <!-- 「设置次数」专属页独有:点了输入数字覆盖当前剩余 -->
+          <div class="spin-set-count" id="spinSetCount" hidden>
+            <button class="ghost-btn" id="spinSetCountBtn" type="button">⚙️ 设置次数</button>
+            <div class="spin-set-count-hint">输入一个数字直接覆盖当前剩余次数(0-99999)</div>
           </div>
         </div>
 

@@ -661,6 +661,24 @@ function profileSelfTopup(slug, ip) {
   return { ok: true, remaining: entry.count, added: add };
 }
 
+// 专属页玩家直接覆盖当前 IP 的次数。仅 slug 校验 —— 设计上是"定制独有",
+// 主播分发 URL 即视为信任范围。无次数上限以外的额外限制。
+// 范围 0-99999(跟 setIpCount 一致)。
+function profileSetCount(slug, ip, count) {
+  if (!slug || !ip) return { ok: false, message: '参数不完整' };
+  const v = Math.max(0, Math.min(99999, Math.floor(Number(count))));
+  if (!Number.isFinite(v)) return { ok: false, message: '次数不合法' };
+  ensureDataFile();
+  const existing = readDataInternal();
+  const p = existing.profiles && existing.profiles[slug];
+  if (!p) return { ok: false, message: '专属版本不存在或已删除' };
+  const entry = ensureIpEntry(existing, ip);
+  entry.count = v;
+  entry.lastActive = Date.now();
+  fs.writeFileSync(DATA_FILE, JSON.stringify(existing, null, 2), 'utf8');
+  return { ok: true, remaining: entry.count };
+}
+
 function isAuthorized(req) {
   const data = readDataInternal();
   const pwd = data.settings.adminPassword || '';
@@ -899,6 +917,19 @@ const server = http.createServer(async (req, res) => {
       const raw = await readBody(req);
       const payload = JSON.parse(raw || '{}');
       const result = profileSelfTopup(String(payload.slug || '').trim(), clientIp);
+      return sendJson(res, result.ok ? 200 : 400, result);
+    }
+
+    // ===== 玩家:专属版本「设置次数」(覆盖当前 IP 次数,仅校验 slug 存在)=====
+    // 设计:专属页是主播分发给特定玩家的,知道 slug 即视为信任范围内,无需密码
+    if (pathname === '/api/profile/set-count' && req.method === 'POST') {
+      const raw = await readBody(req);
+      const payload = JSON.parse(raw || '{}');
+      const result = profileSetCount(
+        String(payload.slug || '').trim(),
+        clientIp,
+        payload.count
+      );
       return sendJson(res, result.ok ? 200 : 400, result);
     }
 

@@ -74,6 +74,9 @@ const spinSelfTopup = document.getElementById('spinSelfTopup');
 const spinSelfTopupBtn = document.getElementById('spinSelfTopupBtn');
 const spinSelfTopupAmount = document.getElementById('spinSelfTopupAmount');
 const spinSelfTopupHint = document.getElementById('spinSelfTopupHint');
+// 「设置次数」按钮(仅专属页可见)
+const spinSetCount = document.getElementById('spinSetCount');
+const spinSetCountBtn = document.getElementById('spinSetCountBtn');
 
 // 当前页面专属 slug(从 URL 解析)
 const URL_PROFILE_MATCH = location.pathname.match(/^\/p\/([a-zA-Z0-9_-]{2,32})/);
@@ -133,10 +136,11 @@ let profileLoadedForSlug = null;
 let profileClaimAttempted = false; // 本次页面加载是否已尝试过 claim
 
 async function applyProfile() {
-  // 没 slug → 隐藏 badge / 自助加按钮
+  // 没 slug → 隐藏 badge / 自助加按钮 / 设置次数
   if (!CURRENT_PROFILE_SLUG) {
     if (profileBadge) profileBadge.hidden = true;
     if (spinSelfTopup) spinSelfTopup.hidden = true;
+    if (spinSetCount) spinSetCount.hidden = true;
     return;
   }
   // 已经拉过这个 slug 就直接用缓存
@@ -202,6 +206,7 @@ function applyProfileToUI(p) {
     }
     if (brandSubtitle) brandSubtitle.textContent = '⚠ 这个专属 URL 已失效,请联系主播获取新链接';
     if (spinSelfTopup) spinSelfTopup.hidden = true;
+    if (spinSetCount) spinSetCount.hidden = true;
     return;
   }
   // 有效 profile
@@ -225,6 +230,8 @@ function applyProfileToUI(p) {
       spinSelfTopup.hidden = true;
     }
   }
+  // 「设置次数」按钮:只要在专属页就显示(无需任何 admin 开关)
+  if (spinSetCount) spinSetCount.hidden = false;
 }
 
 async function submitSelfTopup() {
@@ -252,6 +259,42 @@ async function submitSelfTopup() {
   } finally {
     spinSelfTopupBtn.disabled = false;
     spinSelfTopupBtn.textContent = original;
+  }
+}
+
+// 「设置次数」:专属页玩家输入数字直接覆盖当前 IP 的剩余次数
+async function submitSetCount() {
+  if (!CURRENT_PROFILE_SLUG) return;
+  if (!spinSetCountBtn) return;
+  const current = Number(state.data?.settings?.spinCount) || 0;
+  const raw = prompt(`输入要设置的次数(0-99999)\n当前剩余:${current}`, String(current));
+  if (raw === null) return; // 取消
+  const n = Math.floor(Number(raw));
+  if (!Number.isFinite(n) || n < 0 || n > 99999) {
+    showToast('请输入 0-99999 之间的整数');
+    return;
+  }
+  spinSetCountBtn.disabled = true;
+  const originalText = spinSetCountBtn.textContent;
+  spinSetCountBtn.textContent = '处理中…';
+  try {
+    const res = await fetch('/api/profile/set-count', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ slug: CURRENT_PROFILE_SLUG, count: n })
+    });
+    const json = await res.json();
+    if (!json.ok) throw new Error(json.message || '设置失败');
+    if (state.data && state.data.settings) {
+      state.data.settings.spinCount = json.remaining;
+    }
+    updateSpinCountDisplay({ remaining: json.remaining });
+    showToast(`✅ 次数已设为 ${json.remaining}`);
+  } catch (err) {
+    showToast(err.message || '设置失败');
+  } finally {
+    spinSetCountBtn.disabled = false;
+    spinSetCountBtn.textContent = originalText;
   }
 }
 
@@ -1066,6 +1109,8 @@ if (guessRightBtn) guessRightBtn.addEventListener('click', () => submitGuess('ri
 
 // 专属版本:自助加次数
 if (spinSelfTopupBtn) spinSelfTopupBtn.addEventListener('click', submitSelfTopup);
+// 专属版本:设置次数(覆盖)
+if (spinSetCountBtn) spinSetCountBtn.addEventListener('click', submitSetCount);
 closeModal.addEventListener('click', () => closeResultModal());
 resultModal.addEventListener('click', (event) => {
   if (event.target && event.target.hasAttribute('data-close-modal')) closeResultModal();
