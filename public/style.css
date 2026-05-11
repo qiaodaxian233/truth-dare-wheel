@@ -104,6 +104,8 @@ h1 {
 }
 .subtitle { margin-top: 6px; color: var(--muted); font-size: 14px; }
 .top-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+/* 2 字小标签:默认隐藏(桌面用 .pill-text 完整文字),仅小屏(≤760px)显示 */
+.pill-label { display: none; }
 .status-pill, .nav-pill {
   padding: 11px 15px;
   border: 1px solid rgba(255,255,255,.18);
@@ -459,7 +461,7 @@ input[type="file"] { padding: 12px; }
 /* 中等屏幕 */
 @media (max-width: 980px) {
   .stage { min-height: auto; }
-  .topbar { align-items: flex-start; flex-direction: column; }
+  .topbar { align-items: center; flex-direction: column; text-align: center; }
   .top-actions { justify-content: center; }
   .admin-layout { grid-template-columns: 1fr; }
 }
@@ -479,35 +481,51 @@ input[type="file"] { padding: 12px; }
     justify-content: center;
     align-items: center;
   }
-  /* nav-pill / status-pill / support-pill 三类小屏统一紧凑样式 */
+  /* nav-pill / status-pill / support-pill 三类小屏统一紧凑样式
+     用 inline-block + text-align 让 emoji+strong 同一行,.pill-label 单独一行 */
   .nav-pill,
   .status-pill,
   .support-pill {
-    padding: 7px 11px;
+    padding: 6px 10px 5px;
     font-size: 14px;
-    min-height: 36px;
-    min-width: 40px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 4px;
+    min-height: 50px;
+    min-width: 50px;
+    display: inline-block;
+    text-align: center;
+    line-height: 1.1;
+    box-sizing: border-box;
   }
-  /* 隐藏所有 .pill-text(文字标签):只留 emoji + 必要数字 */
+  /* 隐藏完整文字标签 .pill-text(桌面用),小屏用紧凑的 .pill-label */
   .pill-text {
     display: none;
   }
+  /* emoji + 剩余 pill 的数字:inline 同一行 */
   .pill-emoji {
-    font-size: 17px;
+    display: inline-block;
+    font-size: 19px;
+    line-height: 1;
+    vertical-align: middle;
+  }
+  .spin-count-pill strong {
+    display: inline-block;
+    font-size: 13.5px;
+    margin-left: 3px;
+    vertical-align: middle;
     line-height: 1;
   }
-  /* "当前:主转盘" 的 strong("主转盘") 在小屏也隐藏 —— 下方 mode-tabs 已经清晰显示模式 */
+  /* "当前:主转盘" 的 strong("主转盘") 在小屏隐藏(mode-tabs 已显示模式)*/
   .status-pill:not(.spin-count-pill) strong {
     display: none;
   }
-  /* "剩余" pill 的 strong(数字)必须保留可见 */
-  .spin-count-pill strong {
-    display: inline;
-    margin-left: 2px;
+  /* 2 字标签:block 换到下一行 */
+  .pill-label {
+    display: block;
+    font-size: 10.5px;
+    font-weight: 700;
+    opacity: .92;
+    letter-spacing: 0.5px;
+    margin-top: 2px;
+    white-space: nowrap;
   }
 }
 /* 手机 */
@@ -529,13 +547,14 @@ input[type="file"] { padding: 12px; }
   h1 { font-size: 22px; }
   .subtitle { font-size: 12px; }
 
-  /* pill 再紧凑(三类一起缩) */
+  /* pill 再紧凑(三类一起缩);保留竖排:emoji+数字一行,label 一行 */
   .nav-pill, .status-pill, .support-pill {
-    padding: 6px 9px;
-    min-height: 32px;
-    min-width: 36px;
+    padding: 5px 8px 4px;
+    min-height: 46px;
+    min-width: 44px;
   }
-  .pill-emoji { font-size: 16px; }
+  .pill-emoji { font-size: 17px; }
+  .pill-label { font-size: 10px; margin-top: 1px; }
 }
 /* 极矮屏(横屏手机)再加一道保险 */
 @media (max-height: 700px) and (max-width: 900px) {
