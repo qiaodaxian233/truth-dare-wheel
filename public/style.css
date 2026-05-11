@@ -948,6 +948,155 @@ body.modal-open { overflow: hidden; }
 }
 
 /* ===== 随机点名 ===== */
+/* ===== 主播控制:转动次数(主界面只读)===== */
+.spin-control-card {
+  max-width: 920px;
+  margin: 16px auto 0;
+  padding: 18px 20px;
+  border-radius: 26px;
+  background:
+    linear-gradient(145deg, rgba(255,255,255,.10), rgba(255,255,255,.04)),
+    radial-gradient(circle at 80% 0%, rgba(49,247,255,.20), transparent 50%);
+  border: 1px solid rgba(255,255,255,.14);
+  box-shadow: 0 18px 60px rgba(0,0,0,.36);
+  position: relative;
+  z-index: 3;
+}
+.spin-control-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.spin-control-head h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: .02em;
+}
+.spin-control-display {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+}
+.spin-control-num {
+  font-size: 38px;
+  font-weight: 900;
+  color: #ffd166;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 18px rgba(255,209,102,.35);
+}
+.spin-control-num.is-empty {
+  color: #ff8da3;
+  text-shadow: 0 0 18px rgba(255,77,109,.5);
+  animation: spinEmptyPulse 1.6s ease-in-out infinite;
+}
+.spin-control-unit {
+  font-size: 15px;
+  color: var(--muted);
+  font-weight: 700;
+}
+.spin-control-hint {
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+/* START 按钮在没次数时半透明显示禁用 */
+.spin-core.is-disabled-empty {
+  opacity: .4;
+  cursor: not-allowed;
+  filter: grayscale(.4);
+}
+
+/* ===== Admin 大后台:IP 管理表 ===== */
+.ip-summary {
+  align-self: center;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+  text-align: right;
+}
+.ip-table-wrap {
+  margin-top: 8px;
+  border-radius: 16px;
+  overflow: auto;
+  max-height: 440px;
+  border: 1px solid rgba(255,255,255,.12);
+}
+.ip-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13.5px;
+  min-width: 540px;
+}
+.ip-table thead th {
+  position: sticky;
+  top: 0;
+  background: rgba(20,16,40,.96);
+  backdrop-filter: blur(8px);
+  padding: 10px 12px;
+  text-align: left;
+  font-weight: 800;
+  font-size: 12.5px;
+  color: var(--muted);
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  border-bottom: 1px solid rgba(255,255,255,.14);
+}
+.ip-table tbody tr {
+  border-bottom: 1px solid rgba(255,255,255,.06);
+  transition: background .15s ease;
+}
+.ip-table tbody tr:hover { background: rgba(49,247,255,.06); }
+.ip-table td { padding: 10px 12px; vertical-align: middle; }
+.ip-cell {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-weight: 600;
+  color: #fff;
+  word-break: break-all;
+}
+.ip-count {
+  font-weight: 900;
+  font-size: 16px;
+  color: #ffd166;
+  font-variant-numeric: tabular-nums;
+}
+.ip-count.is-empty {
+  color: #ff8da3;
+}
+.ip-time {
+  color: var(--muted);
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+.ip-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.ip-actions .small-btn {
+  padding: 6px 10px;
+  font-size: 12px;
+}
+.ip-empty {
+  text-align: center;
+  color: var(--muted);
+  padding: 24px 12px !important;
+  font-style: italic;
+}
+
+@media (max-width: 560px) {
+  .spin-control-head { gap: 8px; }
+  .spin-control-num { font-size: 32px; }
+  .ip-table { font-size: 12.5px; min-width: 480px; }
+  .ip-table td, .ip-table thead th { padding: 8px 8px; }
+}
+
+/* ===== 随机点名 ===== */
 .picker-card {
   max-width: 920px;
   margin: 16px auto 0;

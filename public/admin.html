@@ -108,14 +108,14 @@
         </div>
 
         <h2 style="margin-top:22px;">🎲 转动次数 / 猜左右</h2>
-        <p class="hint" style="margin-top:0">每次玩家点 START(主转盘启动)消耗 1 次。次数为 0 时玩家无法继续抽。<br>开启「猜左右」后,大冒险结果弹窗会出现猜左右按钮:猜对返还次数,猜错增加次数。</p>
+        <p class="hint" style="margin-top:0">每个 IP 独立计数。新玩家(IP)首次访问时自动获得「默认初始次数」。每次玩家点 START 消耗 1 次。<br>开启「猜左右」后,大冒险结果弹窗会出现猜左右按钮。</p>
         <div class="row field" style="grid-template-columns: 1fr 1fr;">
           <div>
-            <label for="spinCountInput">当前剩余转动次数</label>
+            <label for="spinCountInput">默认初始次数(新 IP 进入时分配)</label>
             <input type="number" id="spinCountInput" min="0" max="99999" step="1" value="0" />
           </div>
           <label class="switch-row" style="margin: 22px 0 0;">
-            <span>♾ 无限转(忽略次数)</span>
+            <span>♾ 全局无限转(忽略次数)</span>
             <input type="checkbox" id="spinUnlimitedInput" />
           </label>
         </div>
@@ -125,13 +125,9 @@
         </label>
         <div class="row field" style="grid-template-columns: 1fr 1fr 1fr;">
           <div>
-            <label for="guessRewardInput">猜对返还次数</label>
-            <select id="guessRewardInput">
-              <option value="0">0(不变)</option>
-              <option value="1" selected>1(本次抽奖白嫖)</option>
-              <option value="2">2(奖励 1 次)</option>
-              <option value="3">3(奖励 2 次)</option>
-            </select>
+            <label for="guessRewardInput">猜对增量(允许负数)</label>
+            <input type="number" id="guessRewardInput" min="-100" max="100" step="1" value="-1" />
+            <div class="hint" style="margin-top:4px;font-size:12px;">-1=猜对再扣 1 / 0=不变 / +1=返还 1</div>
           </div>
           <div>
             <label for="guessPenaltyMinInput">猜错最少加</label>
@@ -144,6 +140,29 @@
         </div>
         <div class="field">
           <button class="primary-btn" id="saveSpinSettingsBtn">保存转动次数 / 猜左右设置</button>
+        </div>
+
+        <h2 style="margin-top:22px;">🎮 玩家次数管理(按 IP)</h2>
+        <p class="hint" style="margin-top:0">每个真实参与过抽奖的 IP 会出现在下表(只看 GET 不创建记录)。可针对单个 IP 加减次数、设具体值、重置(下次访问重新发默认次数)。</p>
+        <div class="row field" style="grid-template-columns: auto auto auto 1fr;">
+          <button class="small-btn" id="refreshIpsBtn">🔄 刷新列表</button>
+          <button class="small-btn danger" id="resetAllIpsBtn">⚠ 清空所有 IP</button>
+          <div class="ip-summary" id="ipSummary">--</div>
+        </div>
+        <div class="ip-table-wrap">
+          <table class="ip-table" id="ipTable">
+            <thead>
+              <tr>
+                <th>IP</th>
+                <th>剩余</th>
+                <th>最后活跃</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody id="ipTbody">
+              <tr><td colspan="4" class="ip-empty">点上方「🔄 刷新列表」查看</td></tr>
+            </tbody>
+          </table>
         </div>
 
         <div class="count-box">

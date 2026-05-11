@@ -46,6 +46,12 @@ const guessPenaltyMinInput = document.getElementById('guessPenaltyMinInput');
 const guessPenaltyMaxInput = document.getElementById('guessPenaltyMaxInput');
 const saveSpinSettingsBtn = document.getElementById('saveSpinSettingsBtn');
 
+// IP 管理大后台
+const refreshIpsBtn = document.getElementById('refreshIpsBtn');
+const resetAllIpsBtn = document.getElementById('resetAllIpsBtn');
+const ipSummary = document.getElementById('ipSummary');
+const ipTbody = document.getElementById('ipTbody');
+
 // 登录遮罩相关
 const loginOverlay = document.getElementById('loginOverlay');
 const loginPasswordInput = document.getElementById('loginPasswordInput');
@@ -96,11 +102,11 @@ async function loadData(silent = false) {
     const s = state.data.settings || {};
     pageTitleInput.value = s.pageTitle || '真心话 · 大冒险';
     autoSpinNext.checked = !!s.autoSpinNext;
-    // 转动次数 / 猜左右
-    if (spinCountInput) spinCountInput.value = Number(s.spinCount) || 0;
+    // 转动次数 / 猜左右(spinCountDefault = 新 IP 进入时的初始次数)
+    if (spinCountInput) spinCountInput.value = Number(s.spinCountDefault) || 0;
     if (spinUnlimitedInput) spinUnlimitedInput.checked = !!s.spinUnlimited;
     if (guessEnabledInput) guessEnabledInput.checked = s.guessEnabled !== false;
-    if (guessRewardInput) guessRewardInput.value = String(Number(s.guessRewardOnCorrect) || 0);
+    if (guessRewardInput) guessRewardInput.value = String(Math.floor(Number(s.guessRewardOnCorrect) ?? -1));
     if (guessPenaltyMinInput) guessPenaltyMinInput.value = Number(s.guessPenaltyMin) || 1;
     if (guessPenaltyMaxInput) guessPenaltyMaxInput.value = Number(s.guessPenaltyMax) || 10;
     renderCounts();
@@ -117,10 +123,10 @@ async function saveSpinSettings() {
   const hi = Math.max(lo, parseInt(guessPenaltyMaxInput?.value) || lo);
   state.data.settings = {
     ...(state.data.settings || {}),
-    spinCount: Math.max(0, parseInt(spinCountInput?.value) || 0),
+    spinCountDefault: Math.max(0, parseInt(spinCountInput?.value) || 0),
     spinUnlimited: !!spinUnlimitedInput?.checked,
     guessEnabled: !!guessEnabledInput?.checked,
-    guessRewardOnCorrect: Math.max(0, parseInt(guessRewardInput?.value) || 0),
+    guessRewardOnCorrect: Math.floor(Number(guessRewardInput?.value) || 0),
     guessPenaltyMin: lo,
     guessPenaltyMax: hi
   };
@@ -135,6 +141,145 @@ async function saveSpinSettings() {
   } finally {
     saveSpinSettingsBtn.disabled = false;
     saveSpinSettingsBtn.textContent = original;
+  }
+}
+
+// ===== IP 管理大后台 =====
+
+function formatRelativeTime(ts) {
+  if (!ts) return '从未';
+  const diff = Date.now() - ts;
+  if (diff < 0) return '未来?';
+  if (diff < 60_000) return Math.floor(diff / 1000) + ' 秒前';
+  if (diff < 3600_000) return Math.floor(diff / 60_000) + ' 分钟前';
+  if (diff < 86400_000) return Math.floor(diff / 3600_000) + ' 小时前';
+  return Math.floor(diff / 86400_000) + ' 天前';
+}
+
+async function loadIpList(silent = false) {
+  if (!refreshIpsBtn) return;
+  refreshIpsBtn.disabled = true;
+  const originalText = refreshIpsBtn.textContent;
+  refreshIpsBtn.textContent = '加载中…';
+  try {
+    const res = await fetch('/api/admin/ips', { headers: adminHeaders() });
+    const json = await res.json();
+    if (res.status === 401) throw new Error('登录已失效,请刷新页面重新输入密码');
+    if (!json.ok) throw new Error(json.message || '获取列表失败');
+    renderIpList(json);
+    if (!silent) showToast(`已加载 ${json.total} 个 IP`);
+  } catch (err) {
+    showToast(err.message || '加载失败');
+  } finally {
+    refreshIpsBtn.disabled = false;
+    refreshIpsBtn.textContent = originalText;
+  }
+}
+
+function renderIpList(json) {
+  if (!ipTbody) return;
+  if (ipSummary) {
+    ipSummary.textContent = `共 ${json.total} 个 IP · 默认初始 ${json.spinCountDefault} 次 · ${json.spinUnlimited ? '♾ 全局无限' : '按次扣减'}`;
+  }
+  if (!json.list || !json.list.length) {
+    ipTbody.innerHTML = '<tr><td colspan="4" class="ip-empty">还没有玩家访问过 / 已被清空</td></tr>';
+    return;
+  }
+  ipTbody.innerHTML = '';
+  for (const row of json.list) {
+    const tr = document.createElement('tr');
+    const empty = row.count <= 0 && !json.spinUnlimited;
+    tr.innerHTML = `
+      <td class="ip-cell">${escapeHTML(row.ip)}</td>
+      <td class="ip-count ${empty ? 'is-empty' : ''}">${row.count}</td>
+      <td class="ip-time">${escapeHTML(formatRelativeTime(row.lastActive))}</td>
+      <td class="ip-actions">
+        <button class="small-btn" data-ip-add="10" data-ip="${escapeHTML(row.ip)}">+10</button>
+        <button class="small-btn" data-ip-add="50" data-ip="${escapeHTML(row.ip)}">+50</button>
+        <button class="small-btn" data-ip-set data-ip="${escapeHTML(row.ip)}">设值</button>
+        <button class="small-btn danger" data-ip-reset data-ip="${escapeHTML(row.ip)}">重置</button>
+      </td>
+    `;
+    ipTbody.appendChild(tr);
+  }
+  // 绑定操作按钮
+  ipTbody.querySelectorAll('[data-ip-add]').forEach(btn => {
+    btn.addEventListener('click', () => ipAdd(btn.dataset.ip, parseInt(btn.dataset.ipAdd)));
+  });
+  ipTbody.querySelectorAll('[data-ip-set]').forEach(btn => {
+    btn.addEventListener('click', () => ipSet(btn.dataset.ip));
+  });
+  ipTbody.querySelectorAll('[data-ip-reset]').forEach(btn => {
+    btn.addEventListener('click', () => ipReset(btn.dataset.ip));
+  });
+}
+
+async function ipAdd(ip, delta) {
+  try {
+    const res = await fetch('/api/admin/ip/add', {
+      method: 'POST',
+      headers: adminHeaders(),
+      body: JSON.stringify({ ip, delta })
+    });
+    const json = await res.json();
+    if (!json.ok) throw new Error(json.message || '操作失败');
+    showToast(`${ip} ${delta > 0 ? '+' : ''}${delta} → ${json.count}`);
+    loadIpList(true);
+  } catch (err) {
+    showToast(err.message || '操作失败');
+  }
+}
+
+async function ipSet(ip) {
+  const v = prompt(`把 IP「${ip}」的剩余次数设为多少?`, '0');
+  if (v === null) return;
+  const count = Math.max(0, parseInt(v));
+  if (!Number.isFinite(count)) { showToast('请输入数字'); return; }
+  try {
+    const res = await fetch('/api/admin/ip/set', {
+      method: 'POST',
+      headers: adminHeaders(),
+      body: JSON.stringify({ ip, count })
+    });
+    const json = await res.json();
+    if (!json.ok) throw new Error(json.message || '操作失败');
+    showToast(`${ip} 已设为 ${json.count}`);
+    loadIpList(true);
+  } catch (err) {
+    showToast(err.message || '操作失败');
+  }
+}
+
+async function ipReset(ip) {
+  if (!confirm(`重置 IP「${ip}」?\n\n该 IP 记录会被删除,下次访问时重新发放默认初始次数。`)) return;
+  try {
+    const res = await fetch('/api/admin/ip/reset', {
+      method: 'POST',
+      headers: adminHeaders(),
+      body: JSON.stringify({ ip })
+    });
+    const json = await res.json();
+    if (!json.ok) throw new Error(json.message || '操作失败');
+    showToast(`${ip} 已重置`);
+    loadIpList(true);
+  } catch (err) {
+    showToast(err.message || '操作失败');
+  }
+}
+
+async function resetAllIps() {
+  if (!confirm('⚠ 清空所有 IP 记录?\n\n所有玩家的当前剩余次数会消失,下次访问时统一重新发放默认初始次数。')) return;
+  try {
+    const res = await fetch('/api/admin/ip/reset-all', {
+      method: 'POST',
+      headers: adminHeaders()
+    });
+    const json = await res.json();
+    if (!json.ok) throw new Error(json.message || '操作失败');
+    showToast('已清空所有 IP 记录');
+    loadIpList(true);
+  } catch (err) {
+    showToast(err.message || '操作失败');
   }
 }
 
@@ -483,6 +628,10 @@ if (adminPasswordInput) {
 // 转动次数 / 猜左右保存
 if (saveSpinSettingsBtn) saveSpinSettingsBtn.addEventListener('click', saveSpinSettings);
 
+// IP 管理
+if (refreshIpsBtn) refreshIpsBtn.addEventListener('click', () => loadIpList());
+if (resetAllIpsBtn) resetAllIpsBtn.addEventListener('click', resetAllIps);
+
 // 登录遮罩
 if (loginSubmitBtn) loginSubmitBtn.addEventListener('click', handleLoginSubmit);
 if (loginPasswordInput) {
@@ -528,6 +677,7 @@ async function handleLoginSubmit() {
     hideLoginOverlay();
     await loadData(true);
     await refreshPasswordStatus();
+    loadIpList(true).catch(() => {});
     showToast('登录成功');
   } catch (err) {
     if (loginError) loginError.textContent = err.message || '密码不正确';
@@ -586,17 +736,16 @@ async function bootstrap() {
   }
 
   if (status.passwordRequired) {
-    // 如果 sessionStorage 有 token,先尝试用它直接拉数据;不行就弹登录框
+    // 如果 localStorage 有 token,先尝试用它直接拉数据;不行就弹登录框
     const existing = getAdminToken();
     if (existing) {
-      // 用一个轻量的请求验证 token 是否有效:尝试 admin/save 一个无变化的数据
-      // 简单做法:先拉 public 数据,通过 admin/login 校验当前 token
       try {
         const probe = await apiAdminLogin(existing);
         if (probe && probe.ok) {
           setAdminToken(probe.token || existing);
           await loadData(true);
           await refreshPasswordStatus();
+          loadIpList(true).catch(() => {});
           return;
         }
       } catch (_) {
@@ -608,5 +757,6 @@ async function bootstrap() {
     // 未设置密码,直接进入
     await loadData(true);
     await refreshPasswordStatus();
+    loadIpList(true).catch(() => {});
   }
 }

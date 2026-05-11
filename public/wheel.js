@@ -57,6 +57,11 @@ const guessLeftBtn = document.getElementById('guessLeftBtn');
 const guessRightBtn = document.getElementById('guessRightBtn');
 const guessResult = document.getElementById('guessResult');
 
+// 主界面转动次数(只读卡片)
+const spinControlCard = document.getElementById('spinControlCard');
+const spinControlNum = document.getElementById('spinControlNum');
+const spinControlHint = document.getElementById('spinControlHint');
+
 const palette = [
   ['#31f7ff', '#0ea5e9'], ['#ff3cf0', '#a855f7'], ['#ffd166', '#fb923c'],
   ['#34d399', '#10b981'], ['#f472b6', '#e11d48'], ['#a78bfa', '#6366f1'],
@@ -66,13 +71,42 @@ const palette = [
 
 // ===== 转动次数显示 + 猜左右 =====
 function updateSpinCountDisplay(info) {
-  if (!spinCountPill) return;
   const remaining = Number(info?.remaining ?? state.data?.settings?.spinCount) || 0;
   const unlimited = !!(info?.unlimited ?? state.data?.settings?.spinUnlimited);
-  spinCountPill.hidden = false;
-  if (spinCountValue) spinCountValue.textContent = unlimited ? '∞' : String(remaining);
-  if (spinUnlimitedBadge) spinUnlimitedBadge.hidden = !unlimited;
-  spinCountPill.classList.toggle('is-empty', !unlimited && remaining <= 0);
+  // topbar 胶囊
+  if (spinCountPill) {
+    spinCountPill.hidden = false;
+    if (spinCountValue) spinCountValue.textContent = unlimited ? '∞' : String(remaining);
+    if (spinUnlimitedBadge) spinUnlimitedBadge.hidden = !unlimited;
+    spinCountPill.classList.toggle('is-empty', !unlimited && remaining <= 0);
+  }
+  // 主界面只读卡片的大数字
+  if (spinControlNum) {
+    spinControlNum.textContent = unlimited ? '∞' : String(remaining);
+    spinControlNum.classList.toggle('is-empty', !unlimited && remaining <= 0);
+  }
+  if (spinControlHint) {
+    if (unlimited) {
+      spinControlHint.textContent = '♾ 当前为无限转模式,主播已开启不限次数。';
+    } else if (remaining <= 0) {
+      spinControlHint.textContent = '⚠ 转动次数已用完,请联系主播补充次数。';
+    } else {
+      spinControlHint.textContent = '每次点 START 消耗 1 次。次数用完后请联系主播补充。';
+    }
+  }
+  // 没次数 + 非无限 → 禁用 START
+  const noSpinsLeft = !unlimited && remaining <= 0;
+  const isMain = state.mode === 'main';
+  if (spinBtn) {
+    spinBtn.disabled = state.spinning || (isMain && noSpinsLeft);
+    spinBtn.classList.toggle('is-disabled-empty', isMain && noSpinsLeft);
+  }
+  if (sideSpinBtn) {
+    sideSpinBtn.disabled = state.spinning || (isMain && noSpinsLeft);
+  }
+  if (resultTip && isMain && noSpinsLeft && !state.spinning) {
+    resultTip.textContent = '⚠ 转动次数已用完,请联系主播补充';
+  }
 }
 
 async function submitGuess(guess) {
@@ -97,12 +131,16 @@ async function submitGuess(guess) {
       const arrow = json.answer === 'left' ? '⬅' : '➡';
       if (json.correct) {
         guessResult.className = 'guess-result is-correct';
-        guessResult.textContent = json.delta > 0
-          ? `🎉 猜对啦!正确答案是 ${arrow}  返还 +${json.delta} 次`
-          : `🎉 猜对啦!正确答案是 ${arrow}`;
+        if (json.delta > 0) {
+          guessResult.textContent = `🎉 猜对啦!正确答案是 ${arrow}  返还 +${json.delta} 次`;
+        } else if (json.delta < 0) {
+          guessResult.textContent = `🎉 猜对啦!正确答案是 ${arrow}  扣 ${Math.abs(json.delta)} 次,剩 ${json.remaining}`;
+        } else {
+          guessResult.textContent = `🎉 猜对啦!正确答案是 ${arrow}`;
+        }
       } else {
         guessResult.className = 'guess-result is-wrong';
-        guessResult.textContent = `😅 猜错了,正确答案是 ${arrow}  增加 +${json.delta} 次转动`;
+        guessResult.textContent = `😅 猜错了,正确答案是 ${arrow}  增加 +${json.delta} 次,剩 ${json.remaining}`;
       }
     }
   } catch (err) {
@@ -574,10 +612,11 @@ async function spin() {
 
 function finishSpin(selected, selectedIndex) {
   state.spinning = false;
-  spinBtn.disabled = false;
-  sideSpinBtn.disabled = false;
+  // 不直接 enable,交给 updateSpinCountDisplay 根据剩余次数判断
   stopSpinSound(true);
   burstConfetti();
+  // 重新评估按钮 disabled 状态(可能转完最后一次,变为禁用)
+  updateSpinCountDisplay({});
 
   if (state.mode === 'main') {
     const route = selected.route;
@@ -656,6 +695,8 @@ function setMode(mode) {
     : '点击 START 抽取当前大转盘内容;完整题目会全屏弹窗显示';
   resizeCanvasIfNeeded();
   drawWheel();
+  // 切换模式时重新评估 START 禁用状态(只有主转盘模式才会被次数 disabled)
+  updateSpinCountDisplay({});
 }
 
 async function saveSettings() {
