@@ -1,6 +1,6 @@
 {
   "name": "truth-dare-wheel-split-pages-optimized",
-  "version": "2.11.0",
+  "version": "2.11.1",
   "description": "真心话大冒险炫酷转盘：双页面、题库大数量优化、全屏结果弹窗、移动端适配。",
   "main": "server.js",
   "scripts": {
