@@ -1118,7 +1118,7 @@ body.modal-open { overflow: hidden; }
   font-variant-numeric: tabular-nums;
 }
 
-/* ===== 主界面双列布局(转动次数 + 随机点名 并排)===== */
+/* ===== 主界面双列布局(转动次数 + 随机点名 并排,1:1 小方块)===== */
 .side-by-side-row {
   max-width: 920px;
   margin: 16px auto 0;
@@ -1132,12 +1132,84 @@ body.modal-open { overflow: hidden; }
   margin: 0; /* 由 row 控制间距 */
   max-width: none;
   width: 100%;
+  /* 1:1 正方形 + 内部 flex column 均匀分布 */
+  aspect-ratio: 1 / 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 0;
+  overflow: hidden;
 }
 @media (max-width: 760px) {
   .side-by-side-row {
-    grid-template-columns: 1fr;
-    gap: 14px;
+    /* 保持 2 列,不堆叠 */
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
   }
+  /* 小屏正方形内部:padding 缩小,hint 隐藏 */
+  .side-by-side-row > .spin-control-card,
+  .side-by-side-row > .picker-card {
+    padding: 12px 12px;
+    border-radius: 20px;
+  }
+  /* 隐藏 hint 类文字(空间不够,功能仍可用)*/
+  .side-by-side-row .spin-control-hint,
+  .side-by-side-row .spin-self-topup-hint,
+  .side-by-side-row .spin-set-count-hint {
+    display: none;
+  }
+  /* 紧凑标题 */
+  .side-by-side-row .spin-control-head h3,
+  .side-by-side-row .picker-head h3 {
+    font-size: 14px;
+  }
+  .side-by-side-row .spin-control-num { font-size: 26px; }
+  .side-by-side-row .spin-control-unit { font-size: 13px; }
+  /* 内部容器去掉额外 margin/padding/border,让内容贴满 */
+  .side-by-side-row .spin-self-topup,
+  .side-by-side-row .spin-set-count {
+    margin-top: 8px;
+    padding: 8px 10px;
+    border-radius: 12px;
+  }
+  /* 按钮缩小 */
+  .side-by-side-row .spin-self-topup .primary-btn,
+  .side-by-side-row .spin-set-count .ghost-btn {
+    padding: 8px 10px;
+    font-size: 13px;
+    min-height: auto;
+  }
+  /* picker 内部紧凑 */
+  .side-by-side-row .picker-head { margin-bottom: 8px; gap: 6px; }
+  .side-by-side-row .picker-people { padding: 2px 6px 2px 10px; gap: 4px; }
+  .side-by-side-row .picker-people label { font-size: 11px; }
+  .side-by-side-row .picker-step { width: 24px; height: 24px; font-size: 14px; }
+  .side-by-side-row .picker-people input { font-size: 14px; width: 28px; }
+  /* picker-body 改成 column(上结果下按钮),适配窄方块 */
+  .side-by-side-row .picker-body {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  .side-by-side-row .picker-result {
+    min-height: auto;
+    padding: 6px 8px;
+  }
+  .side-by-side-row .picker-tip { font-size: 11px; }
+  .side-by-side-row .picker-num { font-size: clamp(20px, 5vw, 32px); }
+  .side-by-side-row .picker-go.primary-btn {
+    padding: 8px 10px;
+    font-size: 13px;
+    min-height: auto;
+  }
+}
+@media (max-width: 420px) {
+  /* 极小屏:进一步压缩字体 */
+  .side-by-side-row { gap: 8px; }
+  .side-by-side-row > .spin-control-card,
+  .side-by-side-row > .picker-card { padding: 10px 9px; }
+  .side-by-side-row .spin-control-head h3,
+  .side-by-side-row .picker-head h3 { font-size: 13px; }
+  .side-by-side-row .spin-control-num { font-size: 22px; }
 }
 
 /* ===== 主播控制:转动次数(主界面只读)===== */
