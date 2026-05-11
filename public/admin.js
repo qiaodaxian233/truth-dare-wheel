@@ -56,6 +56,7 @@ const ipTbody = document.getElementById('ipTbody');
 const newProfileName = document.getElementById('newProfileName');
 const newProfileAllowSelfTopup = document.getElementById('newProfileAllowSelfTopup');
 const newProfileAmount = document.getElementById('newProfileAmount');
+const newProfileInitial = document.getElementById('newProfileInitial');
 const createProfileBtn = document.getElementById('createProfileBtn');
 const profileCreateHint = document.getElementById('profileCreateHint');
 const profileTbody = document.getElementById('profileTbody');
@@ -309,7 +310,7 @@ async function loadProfileList(silent = false) {
 function renderProfileList(list) {
   if (!profileTbody) return;
   if (!list.length) {
-    profileTbody.innerHTML = '<tr><td colspan="6" class="ip-empty">还没有专属版本,在上方输入名字创建</td></tr>';
+    profileTbody.innerHTML = '<tr><td colspan="7" class="ip-empty">还没有专属版本,在上方输入名字创建</td></tr>';
     return;
   }
   const origin = location.origin;
@@ -317,10 +318,19 @@ function renderProfileList(list) {
   for (const p of list) {
     const tr = document.createElement('tr');
     const url = `${origin}/p/${p.slug}`;
+    const claimedCount = p.claimedIps ? Object.keys(p.claimedIps).length : 0;
+    const initial = Number(p.initialCount) || 0;
     tr.innerHTML = `
       <td class="ip-cell" style="font-family:inherit;">${escapeHTML(p.name)}</td>
       <td class="ip-cell">
         <a href="${escapeHTML(url)}" target="_blank" rel="noopener" style="color:#9be7ff;">${escapeHTML(url)}</a>
+      </td>
+      <td>
+        <input type="number" class="profile-amount" data-profile-initial="${escapeHTML(p.slug)}" min="0" max="9999" step="1" value="${initial}" />
+      </td>
+      <td class="ip-time">
+        ${claimedCount} 人
+        ${claimedCount > 0 ? `<button class="small-btn" data-profile-reset-claims="${escapeHTML(p.slug)}" data-profile-name="${escapeHTML(p.name)}" style="margin-left:6px;padding:3px 7px;font-size:11px;">重置认领</button>` : ''}
       </td>
       <td>
         <label class="switch-row" style="margin:0;">
@@ -330,7 +340,6 @@ function renderProfileList(list) {
       <td>
         <input type="number" class="profile-amount" data-profile-amount="${escapeHTML(p.slug)}" min="1" max="50" step="1" value="${Number(p.selfTopupAmount) || 5}" ${p.allowSelfTopup ? '' : 'disabled'} />
       </td>
-      <td class="ip-time">${escapeHTML(formatRelativeTime(p.createdAt))}</td>
       <td class="ip-actions">
         <button class="small-btn" data-profile-copy="${escapeHTML(url)}">📋 复制 URL</button>
         <button class="small-btn danger" data-profile-delete="${escapeHTML(p.slug)}" data-profile-name="${escapeHTML(p.name)}">删除</button>
@@ -345,11 +354,17 @@ function renderProfileList(list) {
   profileTbody.querySelectorAll('[data-profile-amount]').forEach(el => {
     el.addEventListener('change', () => updateProfileAmount(el.dataset.profileAmount, parseInt(el.value)));
   });
+  profileTbody.querySelectorAll('[data-profile-initial]').forEach(el => {
+    el.addEventListener('change', () => updateProfileInitial(el.dataset.profileInitial, parseInt(el.value)));
+  });
   profileTbody.querySelectorAll('[data-profile-copy]').forEach(btn => {
     btn.addEventListener('click', () => copyToClipboard(btn.dataset.profileCopy));
   });
   profileTbody.querySelectorAll('[data-profile-delete]').forEach(btn => {
     btn.addEventListener('click', () => deleteProfile(btn.dataset.profileDelete, btn.dataset.profileName));
+  });
+  profileTbody.querySelectorAll('[data-profile-reset-claims]').forEach(btn => {
+    btn.addEventListener('click', () => resetProfileClaims(btn.dataset.profileResetClaims, btn.dataset.profileName));
   });
 }
 
@@ -370,7 +385,8 @@ async function createProfile() {
       body: JSON.stringify({
         name,
         allowSelfTopup: !!newProfileAllowSelfTopup?.checked,
-        selfTopupAmount: Math.max(1, Math.min(50, parseInt(newProfileAmount?.value) || 5))
+        selfTopupAmount: Math.max(1, Math.min(50, parseInt(newProfileAmount?.value) || 5)),
+        initialCount: Math.max(0, Math.min(9999, parseInt(newProfileInitial?.value) || 0))
       })
     });
     const json = await res.json();
@@ -422,6 +438,39 @@ async function updateProfileAmount(slug, amount) {
     showToast(`每次加次数已改为 ${v}`);
   } catch (err) {
     showToast(err.message || '更新失败');
+  }
+}
+
+async function updateProfileInitial(slug, amount) {
+  const v = Math.max(0, Math.min(9999, Math.floor(Number(amount) || 0)));
+  try {
+    const res = await fetch('/api/admin/profile/update', {
+      method: 'POST',
+      headers: adminHeaders(),
+      body: JSON.stringify({ slug, initialCount: v })
+    });
+    const json = await res.json();
+    if (!json.ok) throw new Error(json.message || '更新失败');
+    showToast(`首次给次数已改为 ${v}(只影响未来未领取的 IP)`);
+  } catch (err) {
+    showToast(err.message || '更新失败');
+  }
+}
+
+async function resetProfileClaims(slug, name) {
+  if (!confirm(`重置专属页「${name}」的认领状态?\n\n所有已领过首次次数的 IP 会被清空记录,他们再次访问该 URL 会重新领一次。`)) return;
+  try {
+    const res = await fetch('/api/admin/profile/reset-claims', {
+      method: 'POST',
+      headers: adminHeaders(),
+      body: JSON.stringify({ slug })
+    });
+    const json = await res.json();
+    if (!json.ok) throw new Error(json.message || '操作失败');
+    showToast(`「${name}」认领状态已重置`);
+    loadProfileList(true);
+  } catch (err) {
+    showToast(err.message || '操作失败');
   }
 }
 

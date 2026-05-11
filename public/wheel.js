@@ -126,6 +126,7 @@ function updateSpinCountDisplay(info) {
 // 专属页信息缓存(避免每次轮询都重新拉);失效时清掉
 let currentProfile = null;
 let profileLoadedForSlug = null;
+let profileClaimAttempted = false; // 本次页面加载是否已尝试过 claim
 
 async function applyProfile() {
   // 没 slug → 隐藏 badge / 自助加按钮
@@ -149,11 +150,41 @@ async function applyProfile() {
     }
     profileLoadedForSlug = CURRENT_PROFILE_SLUG;
     applyProfileToUI(currentProfile);
+    // 有效 profile 且尚未领取 → 自动 claim 一次 initialCount
+    if (currentProfile && !currentProfile.alreadyClaimed && currentProfile.initialCount > 0 && !profileClaimAttempted) {
+      profileClaimAttempted = true;
+      claimProfileInitial();
+    }
   } catch (err) {
     console.warn('profile fetch failed:', err);
     currentProfile = null;
     profileLoadedForSlug = CURRENT_PROFILE_SLUG;
     applyProfileToUI(null);
+  }
+}
+
+// 自动领取专属页初始次数(每个 IP 一次,服务端校验)
+async function claimProfileInitial() {
+  try {
+    const res = await fetch('/api/profile/claim', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ slug: CURRENT_PROFILE_SLUG })
+    });
+    const json = await res.json();
+    if (!json.ok) return;
+    if (json.added > 0) {
+      // 同步本地次数 + UI
+      if (state.data && state.data.settings) {
+        state.data.settings.spinCount = json.remaining;
+      }
+      updateSpinCountDisplay({ remaining: json.remaining });
+      // 缓存里也标记已领,避免本次会话再触发
+      if (currentProfile) currentProfile.alreadyClaimed = true;
+      showToast(`🎁 ${currentProfile.name} 专属:获得 ${json.added} 次抽奖!`);
+    }
+  } catch (err) {
+    console.warn('profile claim failed:', err);
   }
 }
 

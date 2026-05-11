@@ -176,7 +176,8 @@ function normalizeData(input) {
     };
   }
 
-  // profiles 校验:key 必须是 [a-z0-9_-]{2,32},value 是 {name, slug, allowSelfTopup, selfTopupAmount, createdAt}
+  // profiles 校验:key 必须是 [a-zA-Z0-9_-]{2,32}
+  // value 是 {name, slug, allowSelfTopup, selfTopupAmount, initialCount, claimedIps, createdAt}
   const rawProfiles = src.profiles && typeof src.profiles === 'object' ? src.profiles : {};
   const profiles = {};
   for (const [slug, p] of Object.entries(rawProfiles)) {
@@ -185,11 +186,22 @@ function normalizeData(input) {
     const entry = p && typeof p === 'object' ? p : {};
     const name = String(entry.name || '').trim().slice(0, 32);
     if (!name) continue;
+    // claimedIps: { "<ip>": timestamp_ms }
+    const rawClaimed = entry.claimedIps && typeof entry.claimedIps === 'object' ? entry.claimedIps : {};
+    const claimedIps = {};
+    for (const [ip, ts] of Object.entries(rawClaimed)) {
+      if (!ip || typeof ip !== 'string' || ip.length > 80) continue;
+      const t = Math.max(0, Math.floor(num(ts, 0, 0, Number.MAX_SAFE_INTEGER)));
+      if (t > 0) claimedIps[ip] = t;
+    }
     profiles[slug] = {
       name,
       slug,
       allowSelfTopup: !!entry.allowSelfTopup,
       selfTopupAmount: Math.max(1, Math.min(50, Math.floor(num(entry.selfTopupAmount, 5, 1, 50)))),
+      // initialCount: 首次访问该专属页时一次性赠送的次数(0~9999,跟礼物分挂钩)
+      initialCount: Math.max(0, Math.min(9999, Math.floor(num(entry.initialCount, 0, 0, 9999)))),
+      claimedIps,
       createdAt: Math.max(0, Math.floor(num(entry.createdAt, Date.now(), 0, Number.MAX_SAFE_INTEGER)))
     };
   }
@@ -249,7 +261,8 @@ function readDataPublic(clientIp) {
 }
 
 // 单个专属页查询(玩家页用,只返回必要的公开字段)
-function getProfilePublic(slug) {
+// 返回 alreadyClaimed:让前端知道这个 IP 是否已领过 initialCount(不重复显示"已发放"提示)
+function getProfilePublic(slug, ip) {
   if (!slug) return null;
   const d = readDataInternal();
   const p = d.profiles && d.profiles[slug];
@@ -258,7 +271,9 @@ function getProfilePublic(slug) {
     slug: p.slug,
     name: p.name,
     allowSelfTopup: !!p.allowSelfTopup,
-    selfTopupAmount: Number(p.selfTopupAmount) || 5
+    selfTopupAmount: Number(p.selfTopupAmount) || 5,
+    initialCount: Number(p.initialCount) || 0,
+    alreadyClaimed: ip && p.claimedIps && !!p.claimedIps[ip]
   };
 }
 
@@ -534,6 +549,8 @@ function createProfile(payload) {
     slug,
     allowSelfTopup: !!payload?.allowSelfTopup,
     selfTopupAmount: Math.max(1, Math.min(50, Math.floor(Number(payload?.selfTopupAmount) || 5))),
+    initialCount: Math.max(0, Math.min(9999, Math.floor(Number(payload?.initialCount) || 0))),
+    claimedIps: {},
     createdAt: Date.now()
   };
   existing.profiles[slug] = profile;
@@ -558,8 +575,62 @@ function updateProfile(payload) {
   if ('selfTopupAmount' in payload) {
     p.selfTopupAmount = Math.max(1, Math.min(50, Math.floor(Number(payload.selfTopupAmount) || 5)));
   }
+  if ('initialCount' in payload) {
+    p.initialCount = Math.max(0, Math.min(9999, Math.floor(Number(payload.initialCount) || 0)));
+  }
   fs.writeFileSync(DATA_FILE, JSON.stringify(existing, null, 2), 'utf8');
   return { ok: true, profile: p };
+}
+
+// 玩家首次访问某专属页时领取 initialCount(同一 IP 不重复领)
+// 返回 { ok, added, remaining, alreadyClaimed }
+function claimProfile(slug, ip) {
+  if (!slug || !ip) return { ok: false, message: '参数不完整' };
+  ensureDataFile();
+  const existing = readDataInternal();
+  const p = existing.profiles && existing.profiles[slug];
+  if (!p) return { ok: false, message: '专属页不存在或已删除' };
+  if (!p.claimedIps) p.claimedIps = {};
+  const initialCount = Math.max(0, Math.floor(Number(p.initialCount) || 0));
+  // 已经领过 → 不重复发,只返回当前状态
+  if (p.claimedIps[ip]) {
+    const entry = ensureIpEntry(existing, ip);
+    return {
+      ok: true,
+      added: 0,
+      remaining: entry.count,
+      alreadyClaimed: true,
+      initialCount
+    };
+  }
+  // initialCount 为 0 → 啥都不加,但仍标记已领防止以后改了又重发
+  const entry = ensureIpEntry(existing, ip);
+  if (initialCount > 0) {
+    entry.count = Math.max(0, Math.min(99999, entry.count + initialCount));
+    entry.lastActive = Date.now();
+  }
+  p.claimedIps[ip] = Date.now();
+  fs.writeFileSync(DATA_FILE, JSON.stringify(existing, null, 2), 'utf8');
+  return {
+    ok: true,
+    added: initialCount,
+    remaining: entry.count,
+    alreadyClaimed: false,
+    initialCount
+  };
+}
+
+// 管理员重置某专属页的认领状态(让所有 IP 可以重新领 initialCount)
+function resetProfileClaims(slug) {
+  if (!slug) return { ok: false, message: 'slug 不能为空' };
+  ensureDataFile();
+  const existing = readDataInternal();
+  if (!existing.profiles || !existing.profiles[slug]) {
+    return { ok: false, message: '专属页不存在' };
+  }
+  existing.profiles[slug].claimedIps = {};
+  fs.writeFileSync(DATA_FILE, JSON.stringify(existing, null, 2), 'utf8');
+  return { ok: true };
 }
 
 function deleteProfile(slug) {
@@ -835,9 +906,28 @@ const server = http.createServer(async (req, res) => {
     if (pathname === '/api/profile/get' && req.method === 'GET') {
       const url = new URL(req.url, 'http://localhost');
       const slug = String(url.searchParams.get('slug') || '').trim();
-      const p = getProfilePublic(slug);
+      const p = getProfilePublic(slug, clientIp);
       if (!p) return sendJson(res, 404, { ok: false, message: '专属页不存在或已删除' });
       return sendJson(res, 200, { ok: true, profile: p });
+    }
+
+    // ===== 玩家:领取专属页 initialCount(每 IP 仅一次)=====
+    if (pathname === '/api/profile/claim' && req.method === 'POST') {
+      const raw = await readBody(req);
+      const payload = JSON.parse(raw || '{}');
+      const result = claimProfile(String(payload.slug || '').trim(), clientIp);
+      return sendJson(res, result.ok ? 200 : 400, result);
+    }
+
+    // ===== 管理员:重置某专属页的认领状态 =====
+    if (pathname === '/api/admin/profile/reset-claims' && req.method === 'POST') {
+      if (!isAuthorized(req)) {
+        return sendJson(res, 401, { ok: false, message: '未授权,请先登录' });
+      }
+      const raw = await readBody(req);
+      const payload = JSON.parse(raw || '{}');
+      const result = resetProfileClaims(String(payload.slug || '').trim());
+      return sendJson(res, result.ok ? 200 : 400, result);
     }
 
     return serveStatic(req, res);

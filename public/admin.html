@@ -166,9 +166,14 @@
         </div>
 
         <h2 style="margin-top:22px;">🎁 专属定制版本</h2>
-        <p class="hint" style="margin-top:0">为特定的朋友/客户生成专属 URL,他们打开后 banner 会显示自己的名字。可单独开启「玩家自助加次数」让他们点按钮自助补给。次数仍按 IP 隔离(同 v2.7.0)。</p>
-        <div class="row field" style="grid-template-columns: 1fr auto auto auto;">
+        <p class="hint" style="margin-top:0">为特定的朋友/客户生成专属 URL,他们打开后顶部标题变成「XX 专属」。<strong>「首次给」</strong>= 玩家用该 URL 第一次进入时一次性赠送的次数(挂钩礼物用,如跑车 16 次,送跑车就发专属页带 initialCount=16)。<strong>「每次加」</strong>= 自助加按钮每次加多少。两者独立。次数按 IP 隔离。</p>
+        <div class="row field" style="grid-template-columns: 1fr auto auto auto auto;">
           <input type="text" id="newProfileName" placeholder="输入名字,如「小明」" maxlength="32" />
+          <div class="profile-amount-inline">
+            <span style="font-size:13px;color:var(--muted);">首次给</span>
+            <input type="number" id="newProfileInitial" min="0" max="9999" step="1" value="0" />
+            <span style="font-size:13px;color:var(--muted);">次</span>
+          </div>
           <label class="switch-row" style="margin:0;white-space:nowrap;">
             <span style="font-size:13px;">允许自助加</span>
             <input type="checkbox" id="newProfileAllowSelfTopup" checked />
@@ -187,14 +192,15 @@
               <tr>
                 <th>名字</th>
                 <th>专属 URL</th>
+                <th>首次给</th>
+                <th>已领</th>
                 <th>自助加</th>
                 <th>每次加</th>
-                <th>创建</th>
                 <th>操作</th>
               </tr>
             </thead>
             <tbody id="profileTbody">
-              <tr><td colspan="6" class="ip-empty">还没有专属版本,在上方输入名字创建</td></tr>
+              <tr><td colspan="7" class="ip-empty">还没有专属版本,在上方输入名字创建</td></tr>
             </tbody>
           </table>
         </div>
