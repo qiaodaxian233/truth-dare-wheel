@@ -61,7 +61,7 @@ function itemWeight(item) {
 }
 
 function parseImportText(text, target) {
-  const raw = String(text || '').trim();
+  const raw = String(text || '').replace(/\ufffd+/g, '').trim();
   if (!raw) return [];
 
   try {

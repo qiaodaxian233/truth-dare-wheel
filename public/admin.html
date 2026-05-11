@@ -55,9 +55,10 @@
         <div class="row field">
           <button class="small-btn" id="exportBtn">导出 JSON</button>
           <button class="small-btn danger" id="resetBtn">恢复示例</button>
+          <button class="small-btn" id="cleanGarbledBtn" style="background:#e67e22;color:#fff;">🧹 清理乱码</button>
         </div>
 
-        <p class="hint">支持:TXT 一行一条、CSV 每行第一列、JSON 数组,或 {"truth":[...],"dare":[...]}。<br>给某条加权重:行末加 <code>|数字</code>,如 <code>这条题目|3</code> 表示概率是普通题的 3 倍。</p>
+        <p class="hint">支持:TXT 一行一条、CSV 每行第一列、JSON 数组,或 {"truth":[...],"dare":[...]}。<br>给某条加权重:行末加 <code>|数字</code>,如 <code>这条题目|3</code> 表示概率是普通题的 3 倍。<br>编码自动检测:UTF-8 / GBK 均可,无需手动转换。如已有乱码(�),点"🧹 清理乱码"一键修复。</p>
 
         <h2 style="margin-top:22px;">📢 GM 飘屏</h2>
         <p class="hint" style="margin-top:0">向所有玩家页推送一条全屏飘屏消息,持续 3 秒后自动消失。最多 200 字。</p>

@@ -17,6 +17,7 @@ const replaceBtn = document.getElementById('replaceBtn');
 const appendBtn = document.getElementById('appendBtn');
 const exportBtn = document.getElementById('exportBtn');
 const resetBtn = document.getElementById('resetBtn');
+const cleanGarbledBtn = document.getElementById('cleanGarbledBtn');
 const refreshBtn = document.getElementById('refreshBtn');
 const pageTitleInput = document.getElementById('pageTitleInput');
 const autoSpinNext = document.getElementById('autoSpinNext');
@@ -804,15 +805,72 @@ async function resetData() {
   }
 }
 
+// 一键清理题库中的 � 乱码字符
+async function cleanGarbled() {
+  const RE = /\ufffd+/g;
+  let totalCleaned = 0;
+  let totalRemoved = 0;
+  ['truth', 'dare'].forEach(key => {
+    const list = state.data[key];
+    if (!Array.isArray(list)) return;
+    for (let i = list.length - 1; i >= 0; i--) {
+      const item = list[i];
+      const t = typeof item === 'string' ? item : (item && item.text || '');
+      if (!RE.test(t)) continue;
+      const cleaned = t.replace(RE, '').trim();
+      if (!cleaned) {
+        // 清除后为空，直接删掉这条
+        list.splice(i, 1);
+        totalRemoved++;
+      } else {
+        if (typeof item === 'string') list[i] = cleaned;
+        else item.text = cleaned;
+        totalCleaned++;
+      }
+    }
+  });
+  if (totalCleaned === 0 && totalRemoved === 0) {
+    showToast('题库中没有发现 � 乱码');
+    return;
+  }
+  if (!confirm(`发现 ${totalCleaned + totalRemoved} 条含乱码题目:\n• ${totalCleaned} 条可修复（删除 � 字符）\n• ${totalRemoved} 条全是乱码将被删除\n\n确定执行清理?`)) return;
+  try {
+    state.data = await apiAdminSaveData(state.data);
+    renderCounts();
+    renderPreview();
+    showToast(`清理完成:修复 ${totalCleaned} 条,删除 ${totalRemoved} 条`);
+  } catch (err) {
+    showToast(err.message || '清理失败');
+  }
+}
+
 fileInput.addEventListener('change', () => {
   const file = fileInput.files && fileInput.files[0];
   if (!file) return;
+  // 先读 ArrayBuffer，自动检测编码：UTF-8 优先，有乱码回退 GBK
   const reader = new FileReader();
   reader.onload = () => {
-    dataInput.value = String(reader.result || '');
-    showToast(`已读取文件:${file.name}`);
+    const buf = reader.result;
+    let text = new TextDecoder('utf-8').decode(buf);
+    if (text.includes('\ufffd')) {
+      // UTF-8 解码出现 �，回退 GBK
+      try {
+        const gbkText = new TextDecoder('gbk').decode(buf);
+        if (!gbkText.includes('\ufffd')) {
+          text = gbkText;
+          showToast(`检测到 GBK 编码，已自动转换:${file.name}`);
+        } else {
+          showToast(`已读取文件（部分字符可能乱码）:${file.name}`);
+        }
+      } catch (_) {
+        showToast(`已读取文件（部分字符可能乱码）:${file.name}`);
+      }
+    } else {
+      showToast(`已读取文件:${file.name}`);
+    }
+    dataInput.value = text;
   };
-  reader.readAsText(file, 'utf-8');
+  reader.readAsArrayBuffer(file);
 });
 
 targetSelect.addEventListener('change', renderPreview);
@@ -820,6 +878,7 @@ replaceBtn.addEventListener('click', () => importData(targetSelect.value, false)
 appendBtn.addEventListener('click', () => importData(targetSelect.value, true));
 exportBtn.addEventListener('click', exportJSON);
 resetBtn.addEventListener('click', resetData);
+if (cleanGarbledBtn) cleanGarbledBtn.addEventListener('click', cleanGarbled);
 refreshBtn.addEventListener('click', () => loadData(false));
 saveSettingBtn.addEventListener('click', saveSettings);
 saveMainBtn.addEventListener('click', saveMainWeights);
