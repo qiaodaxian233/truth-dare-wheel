@@ -128,7 +128,10 @@ const defaultData = {
   spinByIp: {},
   // ===== 专属定制版本 =====
   // key = slug(URL 段), value = { name, slug, allowSelfTopup, selfTopupAmount, createdAt }
-  profiles: {}
+  profiles: {},
+  // ===== 海龟汤题库 =====
+  // 每项 { id, title, surface, truth, difficulty, source }(source: 'builtin'|'ai'|'admin')
+  soup: []
 };
 
 const mimeTypes = {
@@ -196,6 +199,36 @@ function normalizeMain(list) {
     });
   }
   return out.length ? out : defaultData.main;
+}
+
+// 海龟汤题库校验:每项 { id, title, surface, truth, difficulty, source }
+// 按 surface 文本去重(同一汤面只保留一条)
+function normalizeSoup(list) {
+  if (!Array.isArray(list)) return [];
+  const seen = new Set();
+  const out = [];
+  for (const raw of list) {
+    if (!raw || typeof raw !== 'object') continue;
+    const surface = String(raw.surface || '').trim();
+    const truth = String(raw.truth || '').trim();
+    if (!surface || !truth) continue;
+    const key = surface;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    let diff = parseInt(raw.difficulty, 10);
+    if (!Number.isFinite(diff)) diff = 3;
+    diff = Math.max(1, Math.min(5, diff));
+    const src = ['builtin', 'ai', 'admin'].includes(raw.source) ? raw.source : 'admin';
+    out.push({
+      id: String(raw.id || ('s' + Date.now() + Math.random().toString(36).slice(2, 7))),
+      title: String(raw.title || '无题').trim().slice(0, 40),
+      surface: surface.slice(0, 2000),
+      truth: truth.slice(0, 2000),
+      difficulty: diff,
+      source: src
+    });
+  }
+  return out;
 }
 
 function normalizeData(input) {
@@ -285,7 +318,8 @@ function normalizeData(input) {
       createdAt: Number(broadcastIn.createdAt) || 0
     },
     spinByIp,
-    profiles
+    profiles,
+    soup: normalizeSoup(src.soup)
   };
 }
 
@@ -343,6 +377,10 @@ function writeDataInternal(newData) {
   normalized.settings.adminPassword = existing.settings.adminPassword || '';
   normalized.spinByIp = existing.spinByIp || {};
   normalized.profiles = existing.profiles || {};
+  // soup:若本次保存没带 soup 字段,保留磁盘原有题库(避免被清空)
+  if (!Array.isArray(newData && newData.soup)) {
+    normalized.soup = existing.soup || [];
+  }
   fs.writeFileSync(DATA_FILE, JSON.stringify(normalized, null, 2), 'utf8');
   // 返回对外版(剥离密码 + spinByIp + profiles)
   const out = JSON.parse(JSON.stringify(normalized));
@@ -374,7 +412,8 @@ function writePlayerSafe(newData, clientIp) {
     settings: mergedSettings,
     broadcast: existing.broadcast || { id: 0, text: '', createdAt: 0 },
     spinByIp: existing.spinByIp || {},
-    profiles: existing.profiles || {}
+    profiles: existing.profiles || {},
+    soup: existing.soup || []
   };
   fs.writeFileSync(DATA_FILE, JSON.stringify(merged, null, 2), 'utf8');
   // 返回时构造对外版(注入当前 IP 的 spinCount,剥离密码/spinByIp)
@@ -413,7 +452,42 @@ function setBroadcast(text) {
   return out;
 }
 
-// 取/初始化某个 IP 的 spin 记录(惰性创建)
+// 向海龟汤题库追加题目(按 surface 去重),返回 { added, total }
+// items: 单个对象或对象数组
+function addSoupItems(items) {
+  ensureDataFile();
+  const existing = readDataInternal();
+  const current = Array.isArray(existing.soup) ? existing.soup : [];
+  const seen = new Set(current.map(s => s.surface));
+  const list = Array.isArray(items) ? items : [items];
+  let added = 0;
+  for (const raw of list) {
+    if (!raw || typeof raw !== 'object') continue;
+    const surface = String(raw.surface || '').trim();
+    const truth = String(raw.truth || '').trim();
+    if (!surface || !truth) continue;
+    if (seen.has(surface)) continue;   // 去重:同一汤面不重复入库
+    seen.add(surface);
+    let diff = parseInt(raw.difficulty, 10);
+    if (!Number.isFinite(diff)) diff = 3;
+    diff = Math.max(1, Math.min(5, diff));
+    const src = ['builtin', 'ai', 'admin'].includes(raw.source) ? raw.source : 'ai';
+    current.push({
+      id: 's' + Date.now() + Math.random().toString(36).slice(2, 7),
+      title: String(raw.title || '无题').trim().slice(0, 40),
+      surface: surface.slice(0, 2000),
+      truth: truth.slice(0, 2000),
+      difficulty: diff,
+      source: src
+    });
+    added++;
+  }
+  if (added > 0) {
+    existing.soup = current;
+    fs.writeFileSync(DATA_FILE, JSON.stringify(existing, null, 2), 'utf8');
+  }
+  return { added, total: current.length };
+}
 // 注意:这个 helper 会修改传入的 data 对象,调用者负责写盘
 function ensureIpEntry(data, ip) {
   if (!ip) return null;
@@ -810,6 +884,17 @@ const server = http.createServer(async (req, res) => {
       } catch (e) {
         return sendJson(res, 502, { ok: false, message: e.message });
       }
+    }
+
+    // ===== 海龟汤题库:追加题目(无鉴权,玩家页 AI 出题/首次灌库时调,带去重)=====
+    if (pathname === '/api/soup/add' && req.method === 'POST') {
+      const raw = await readBody(req);
+      let p;
+      try { p = JSON.parse(raw || '{}'); } catch (e) { return sendJson(res, 400, { ok: false, message: '请求格式错误' }); }
+      const items = Array.isArray(p.items) ? p.items : (p.surface ? [p] : []);
+      if (!items.length) return sendJson(res, 400, { ok: false, message: '没有可入库的题目' });
+      const result = addSoupItems(items);
+      return sendJson(res, 200, { ok: true, ...result });
     }
 
     // ===== 公共数据读取(剥离 adminPassword + spinByIp,注入当前 IP 的 spinCount)=====

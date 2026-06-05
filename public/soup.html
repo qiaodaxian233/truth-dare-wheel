@@ -185,8 +185,8 @@
 </div>
 
 <script>
-/* ================= 题库（22 道，离线也能玩；AI 仅判定问答/出题） ================= */
-const PUZZLES = [
+/* ================= 内置题库（22 道，首次自动灌进服务器；之后以服务器题库为准） ================= */
+const BUILTIN = [
   {title:"海龟汤",surface:"一个男人在海边餐厅点了一碗海龟汤。他尝了一口，付了钱，回到家后却结束了自己的生命。为什么？",truth:"多年前他曾在海上遇难漂流，同伴说煮了「海龟汤」给他充饥，让他活了下来。这次在餐厅尝到真正的海龟汤，味道完全不同——他终于明白当年喝下的根本不是海龟肉，而是已死去的同伴。无法承受真相，他了结了自己。",difficulty:4},
   {title:"电梯里的男人",surface:"一个住在 20 楼的男人，每天坐电梯下楼上班。回家时若电梯里有别人，他会坐到 20 楼；若只有他一个人，就只坐到 10 楼，再走楼梯上去。为什么？",truth:"他是侏儒，身高很矮，够不到 20 楼的按钮，只能按到 10 楼。有别人在时可以请人帮按 20 楼，独自时只能按到够得着的 10 楼再爬楼梯。",difficulty:2},
   {title:"半截火柴",surface:"沙漠中发现一具尸体，手里紧紧攥着半截火柴。周围没有任何脚印或车辙。他是怎么死的？",truth:"一群人乘热气球穿越沙漠，气球失去浮力急速下坠。扔光行李仍不够，只能抽火柴决定谁跳下减重。这名男子抽到短火柴，跳下气球身亡。",difficulty:3},
@@ -213,12 +213,41 @@ const PUZZLES = [
 
 /* ================= 状态 ================= */
 let current = null, qCount = 0, aiTitles = [];
+let bank = [];            // 运行时题库（来自服务器，开局加载）
+let bankReady = false;
 const $ = id => document.getElementById(id);
 
+// 开局：从服务器拉题库；若服务器为空，把内置 22 道灌进去
+async function loadBank(){
+  try{
+    const res = await fetch('/api/data');
+    const j = await res.json();
+    const serverSoup = (j && j.data && Array.isArray(j.data.soup)) ? j.data.soup : [];
+    if(serverSoup.length === 0){
+      // 首次：灌入内置题库
+      try{
+        await fetch('/api/soup/add', {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({ items: BUILTIN.map(p => Object.assign({source:'builtin'}, p)) })
+        });
+      }catch(e){}
+      bank = BUILTIN.slice();
+    }else{
+      bank = serverSoup;
+    }
+  }catch(e){
+    // 拉取失败也能玩，用内置兜底
+    bank = BUILTIN.slice();
+  }
+  bankReady = true;
+}
+
 function pickPuzzle(){
+  const pool = (bank && bank.length) ? bank : BUILTIN;
   let next;
-  do{ next = PUZZLES[Math.floor(Math.random()*PUZZLES.length)]; }
-  while(PUZZLES.length>1 && next===current);
+  do{ next = pool[Math.floor(Math.random()*pool.length)]; }
+  while(pool.length>1 && next===current);
   return next;
 }
 
@@ -308,6 +337,15 @@ async function aiGame(){
     const p = await aiGenerate();
     aiTitles.push(p.title); if(aiTitles.length>10) aiTitles.shift();
     setPuzzle(p, '· AI 现拟');
+    // 自动入库:存到服务器题库 + 本地 bank(玩家无感)
+    try{
+      await fetch('/api/soup/add', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify(Object.assign({source:'ai'}, p))
+      });
+      if(!bank.some(x => x.surface === p.surface)) bank.push(p);
+    }catch(e){}
   }catch(e){
     $('puzzleTitle').textContent = '出题失败';
     $('puzzleText').textContent = 'AI 主厨暂时熬不出汤（' + e.message + '）。可以再试一次，或点「盛一碗新汤」用现成题库。';
@@ -388,6 +426,9 @@ $('askBtn').addEventListener('click', ask);
 $('hintBtn').addEventListener('click', hint);
 $('revealBtn').addEventListener('click', reveal);
 $('askInput').addEventListener('keydown', e=>{ if(e.key==='Enter') ask(); });
+
+// 开局加载服务器题库(空则灌入内置 22 道)
+loadBank();
 </script>
 </body>
 </html>

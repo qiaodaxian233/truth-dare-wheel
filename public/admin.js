@@ -122,6 +122,7 @@ async function loadData(silent = false) {
     renderCounts();
     renderMainWeights();
     renderPreview();
+    renderSoup();
     if (!silent) showToast('数据已刷新');
   } catch (err) {
     showToast(err.message || '读取数据失败');
@@ -711,6 +712,140 @@ async function deletePreviewItem(idx) {
   }
 }
 
+/* ================= 海龟汤题库管理 ================= */
+function renderSoup() {
+  const list = (state.data && Array.isArray(state.data.soup)) ? state.data.soup : [];
+  const countEl = document.getElementById('soupCount');
+  if (countEl) countEl.textContent = '(' + list.length + ')';
+  const ul = document.getElementById('soupList');
+  if (!ul) return;
+  ul.innerHTML = '';
+  if (!list.length) {
+    ul.innerHTML = '<li style="color:#888;padding:8px;">题库为空。玩家打开海龟汤页时会自动灌入内置 22 道，或在上面手动添加。</li>';
+    return;
+  }
+  list.forEach((item, index) => {
+    const srcTag = item.source === 'ai' ? '🤖AI' : (item.source === 'builtin' ? '📦内置' : '✍️手动');
+    const li = document.createElement('li');
+    li.style.cssText = 'flex-direction:column;align-items:stretch;gap:6px;';
+    li.innerHTML = `
+      <div class="preview-item-text" style="align-items:flex-start;">
+        <em>#${index + 1}</em>
+        <div style="flex:1;">
+          <div style="font-weight:600;color:#e0a850;">${escapeHTML(item.title || '无题')}
+            <span style="font-size:12px;color:#888;font-weight:400;">${srcTag} · 难度${item.difficulty || 3}</span>
+          </div>
+          <div style="margin-top:4px;"><span style="color:#888;font-size:12px;">汤面：</span><span class="soup-edit" data-soup-field="surface" data-soup-idx="${index}" contenteditable="true" spellcheck="false" title="点击编辑汤面">${escapeHTML(item.surface || '')}</span></div>
+          <div style="margin-top:4px;"><span style="color:#888;font-size:12px;">汤底：</span><span class="soup-edit" data-soup-field="truth" data-soup-idx="${index}" contenteditable="true" spellcheck="false" title="点击编辑汤底">${escapeHTML(item.truth || '')}</span></div>
+        </div>
+      </div>
+      <div class="preview-item-actions">
+        <button class="preview-item-delete" data-soup-delete="${index}" title="删除此题" aria-label="删除此题">🗑 删除</button>
+      </div>
+    `;
+    ul.appendChild(li);
+  });
+
+  ul.querySelectorAll('button[data-soup-delete]').forEach(btn => {
+    btn.addEventListener('click', () => deleteSoupItem(Number(btn.dataset.soupDelete)));
+  });
+  ul.querySelectorAll('span[data-soup-idx]').forEach(span => {
+    span.dataset.original = span.textContent;
+    span.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') { e.preventDefault(); span.textContent = span.dataset.original || ''; span.blur(); }
+    });
+    span.addEventListener('blur', () => commitSoupEdit(span));
+    span.addEventListener('paste', (e) => {
+      e.preventDefault();
+      const text = (e.clipboardData || window.clipboardData).getData('text');
+      document.execCommand('insertText', false, text);
+    });
+  });
+}
+
+async function addSoupItem() {
+  const title = (document.getElementById('soupTitleInput').value || '').trim();
+  const surface = (document.getElementById('soupSurfaceInput').value || '').trim();
+  const truth = (document.getElementById('soupTruthInput').value || '').trim();
+  const difficulty = Math.max(1, Math.min(5, parseInt(document.getElementById('soupDiffInput').value) || 3));
+  const statusEl = document.getElementById('soupStatus');
+  if (!surface || !truth) {
+    statusEl.textContent = '⚠ 汤面和汤底都必须填写';
+    statusEl.style.color = '#c0524a';
+    return;
+  }
+  if (!Array.isArray(state.data.soup)) state.data.soup = [];
+  if (state.data.soup.some(s => s.surface === surface)) {
+    statusEl.textContent = '⚠ 已有相同汤面的题目';
+    statusEl.style.color = '#c0524a';
+    return;
+  }
+  const backup = state.data.soup.slice();
+  state.data.soup.push({
+    id: 's' + Date.now() + Math.random().toString(36).slice(2, 7),
+    title: title || '无题', surface, truth, difficulty, source: 'admin'
+  });
+  const btn = document.getElementById('soupAddBtn');
+  btn.disabled = true; const o = btn.textContent; btn.textContent = '保存中…';
+  try {
+    state.data = await apiAdminSaveData(state.data);
+    document.getElementById('soupTitleInput').value = '';
+    document.getElementById('soupSurfaceInput').value = '';
+    document.getElementById('soupTruthInput').value = '';
+    document.getElementById('soupDiffInput').value = '3';
+    statusEl.textContent = '✓ 已添加';
+    statusEl.style.color = '#5aa469';
+    renderSoup();
+  } catch (err) {
+    state.data.soup = backup;
+    statusEl.textContent = err.message || '保存失败';
+    statusEl.style.color = '#c0524a';
+  } finally {
+    btn.disabled = false; btn.textContent = o;
+  }
+}
+
+async function deleteSoupItem(idx) {
+  const list = state.data.soup || [];
+  if (idx < 0 || idx >= list.length) return;
+  const t = list[idx].title || list[idx].surface.slice(0, 20);
+  if (!confirm('确定删除这道海龟汤吗？\n\n' + t)) return;
+  const backup = list.slice();
+  list.splice(idx, 1);
+  try {
+    state.data = await apiAdminSaveData(state.data);
+    renderSoup();
+    showToast('已删除');
+  } catch (err) {
+    state.data.soup = backup;
+    renderSoup();
+    showToast(err.message || '删除失败');
+  }
+}
+
+async function commitSoupEdit(span) {
+  const idx = Number(span.dataset.soupIdx);
+  const field = span.dataset.soupField;
+  const list = state.data.soup || [];
+  if (idx < 0 || idx >= list.length) return;
+  const newText = (span.textContent || '').replace(/\s+/g, ' ').trim();
+  const original = span.dataset.original || '';
+  if (newText === original) return;
+  if (!newText) { showToast('内容不能为空，已恢复'); span.textContent = original; return; }
+  const cur = list[idx];
+  const old = cur[field];
+  cur[field] = newText;
+  try {
+    state.data = await apiAdminSaveData(state.data);
+    span.dataset.original = newText;
+    showToast('已更新');
+  } catch (err) {
+    cur[field] = old;
+    span.textContent = original;
+    showToast(err.message || '保存失败');
+  }
+}
+
 function escapeHTML(str) {
   return String(str).replace(/[&<>'"]/g, s => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
@@ -917,7 +1052,6 @@ if (adminPasswordInput) {
 
 // 转动次数 / 猜左右保存
 if (saveSpinSettingsBtn) saveSpinSettingsBtn.addEventListener('click', saveSpinSettings);
-
 // IP 管理
 if (refreshIpsBtn) refreshIpsBtn.addEventListener('click', () => loadIpList());
 if (resetAllIpsBtn) resetAllIpsBtn.addEventListener('click', resetAllIps);
@@ -940,6 +1074,9 @@ if (loginPasswordInput) {
     }
   });
 }
+
+const soupAddBtn = document.getElementById('soupAddBtn');
+if (soupAddBtn) soupAddBtn.addEventListener('click', addSoupItem);
 
 bootstrap();
 

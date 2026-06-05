@@ -225,6 +225,27 @@
         </div>
         <ul class="preview-list" id="previewList"></ul>
       </div>
+
+      <div class="card">
+        <h2 style="margin-top:0;">🥣 海龟汤题库 <span id="soupCount" style="font-size:14px;color:#888;">(0)</span></h2>
+        <div class="hint" style="margin-bottom:12px;">玩家页「盛一碗新汤」从这里随机抽题；AI 现出的题会自动入库。下面可手动加题、删题、点文字编辑。</div>
+        <div class="row field">
+          <input type="text" id="soupTitleInput" placeholder="标题（如：海龟汤）" />
+        </div>
+        <div class="row field">
+          <textarea id="soupSurfaceInput" placeholder="汤面（谜面，玩家看到的离奇情境）" style="min-height:60px;"></textarea>
+        </div>
+        <div class="row field">
+          <textarea id="soupTruthInput" placeholder="汤底（完整真相，玩家看不到，AI 据此判断）" style="min-height:80px;"></textarea>
+        </div>
+        <div class="row field" style="grid-template-columns: auto 1fr;">
+          <label style="white-space:nowrap;">难度(1-5)</label>
+          <input type="number" id="soupDiffInput" min="1" max="5" step="1" value="3" />
+        </div>
+        <button class="primary-btn" id="soupAddBtn">➕ 添加这道题</button>
+        <div id="soupStatus" class="hint" style="margin-top:8px;"></div>
+        <ul class="preview-list" id="soupList" style="margin-top:14px;"></ul>
+      </div>
     </section>
 
   </main>
