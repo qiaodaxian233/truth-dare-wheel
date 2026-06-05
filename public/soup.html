@@ -108,6 +108,22 @@
 
   .empty-hint{color:var(--ink-dim);font-size:14px;text-align:center;padding:20px;font-style:italic}
   .error-note{color:var(--no);font-size:13px;margin-top:10px;text-align:center}
+
+  /* 规则提示条 */
+  .rulebar{
+    display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;
+    background:linear-gradient(135deg,rgba(201,138,58,.12),rgba(90,164,105,.06));
+    border:1px solid var(--line);border-radius:14px;padding:14px 18px;margin:18px 0 4px;
+    font-size:15px;color:var(--ink)
+  }
+  .rulebar .mic{font-size:18px}
+  .rulebar .label{color:var(--broth-glow);font-weight:600;letter-spacing:.03em}
+  .rulebar .tags{display:inline-flex;gap:8px;flex-wrap:wrap}
+  .rulebar .tag{padding:4px 12px;border-radius:999px;font-weight:600;font-size:14px}
+  .rulebar .tag.yes{background:rgba(90,164,105,.18);color:#a8d8b2}
+  .rulebar .tag.no{background:rgba(192,82,74,.18);color:#e0a09a}
+  .rulebar .tag.maybe{background:rgba(111,125,140,.18);color:#b8c2cc}
+  .rulebar .tag.key{background:rgba(201,138,58,.22);color:var(--broth-glow)}
 </style>
 </head>
 <body>
@@ -119,6 +135,17 @@
     <h1>超级<span class="accent">海龟汤</span><span class="steam">♨</span></h1>
     <p class="sub">情境推理 · 你只能问「是非题」，主持人只答 是 / 不是 / 无关</p>
   </header>
+
+  <div class="rulebar">
+    <span class="mic">🎙️</span>
+    <span class="label">主持人模式 · 只回答：</span>
+    <span class="tags">
+      <span class="tag yes">是</span>
+      <span class="tag no">不是</span>
+      <span class="tag maybe">无关</span>
+      <span class="tag key">★关键</span>
+    </span>
+  </div>
 
   <details class="config" id="cfgBox">
     <summary><span>⚙️ AI 设置（首次使用先填这里）</span><span id="cfgSummary" class="cfg-status"></span></summary>
