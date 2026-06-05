@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>超级海龟汤 · 推理悬疑</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;900&family=ZCOOL+QingKe+HuangYou&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0b0e14; --bg2:#11161f; --ink:#e8e2d4; --ink-dim:#9a9486;
+    --broth:#c98a3a; --broth-glow:#e0a850;
+    --yes:#5aa469; --no:#c0524a; --maybe:#6f7d8c;
+    --line:rgba(201,138,58,.22);
+    --serif:'Noto Serif SC',serif; --display:'ZCOOL QingKe HuangYou',cursive;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    font-family:var(--serif);
+    background:
+      radial-gradient(900px 600px at 80% -10%, rgba(201,138,58,.10), transparent 60%),
+      radial-gradient(700px 500px at -10% 110%, rgba(90,164,105,.06), transparent 60%),
+      var(--bg);
+    color:var(--ink); min-height:100vh; overflow-x:hidden;
+  }
+  body::before{
+    content:"";position:fixed;inset:0;pointer-events:none;z-index:0;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.025'/%3E%3C/svg%3E");
+  }
+  .wrap{position:relative;z-index:1;max-width:880px;margin:0 auto;padding:24px 20px 80px}
+
+  .backlink{display:inline-flex;align-items:center;gap:6px;color:var(--ink-dim);text-decoration:none;font-size:14px;margin-bottom:8px;transition:.15s}
+  .backlink:hover{color:var(--broth-glow)}
+
+  header{text-align:center;padding:14px 0 12px}
+  .kicker{font-size:13px;letter-spacing:.5em;color:var(--broth);text-transform:uppercase;margin-bottom:10px;padding-left:.5em}
+  h1{font-family:var(--display);font-size:clamp(42px,9vw,76px);line-height:.95;color:var(--ink);text-shadow:0 2px 30px rgba(201,138,58,.25)}
+  h1 .accent{color:var(--broth-glow)}
+  .sub{color:var(--ink-dim);font-size:15px;margin-top:14px;letter-spacing:.05em}
+  .steam{display:inline-block;animation:steam 3s ease-in-out infinite}
+  @keyframes steam{0%,100%{transform:translateY(0);opacity:.7}50%{transform:translateY(-4px);opacity:1}}
+
+  /* 配置区 */
+  .config{background:var(--bg2);border:1px solid var(--line);border-radius:14px;padding:16px 18px;margin:16px 0}
+  .config summary{cursor:pointer;color:var(--broth-glow);font-weight:600;font-size:14px;list-style:none;display:flex;justify-content:space-between;align-items:center}
+  .config summary::-webkit-details-marker{display:none}
+  .config[open] summary{margin-bottom:14px}
+  .config .field{margin-bottom:10px}
+  .config label{display:block;font-size:12px;color:var(--ink-dim);margin-bottom:5px;letter-spacing:.05em}
+  .config input{width:100%;font-family:var(--serif);font-size:14px;padding:10px 12px;border-radius:8px;background:rgba(255,255,255,.04);border:1px solid var(--line);color:var(--ink);outline:none}
+  .config input:focus{border-color:var(--broth)}
+  .config .row{display:flex;gap:10px;align-items:flex-end}
+  .config .row .field{flex:1;margin-bottom:0}
+  .cfg-status{font-size:12px;margin-top:8px}
+  .cfg-status.ok{color:var(--yes)}
+  .cfg-status.bad{color:var(--no)}
+
+  .bowl{margin:20px 0;background:linear-gradient(160deg,var(--bg2),#0d1119);border:1px solid var(--line);border-radius:18px;padding:30px 28px;box-shadow:0 24px 60px -30px rgba(0,0,0,.8), inset 0 1px 0 rgba(255,255,255,.03);position:relative}
+  .bowl::after{content:"";position:absolute;left:28px;top:0;width:42px;height:3px;background:var(--broth);border-radius:0 0 4px 4px}
+  .bowl-label{font-size:12px;letter-spacing:.4em;color:var(--broth);text-transform:uppercase;margin-bottom:14px}
+  .puzzle-title{font-size:26px;font-weight:900;margin-bottom:12px;color:var(--ink)}
+  .puzzle-text{font-size:18px;line-height:1.85;color:#d8d2c4}
+
+  .controls{display:flex;gap:10px;flex-wrap:wrap;margin-top:22px}
+  button{font-family:var(--serif);cursor:pointer;border:none;border-radius:12px;padding:13px 22px;font-size:15px;font-weight:600;transition:.18s;letter-spacing:.04em}
+  .btn-primary{background:linear-gradient(135deg,var(--broth),var(--broth-glow));color:#1a1208;box-shadow:0 8px 24px -10px var(--broth)}
+  .btn-primary:hover{transform:translateY(-2px);box-shadow:0 12px 30px -10px var(--broth-glow)}
+  .btn-ghost{background:rgba(255,255,255,.04);color:var(--ink);border:1px solid var(--line)}
+  .btn-ghost:hover{background:rgba(255,255,255,.08)}
+  button:disabled{opacity:.4;cursor:not-allowed;transform:none!important}
+
+  .ask-row{display:flex;gap:10px;margin-top:8px}
+  .ask-input{flex:1;font-family:var(--serif);font-size:16px;padding:14px 18px;border-radius:12px;background:rgba(255,255,255,.04);border:1px solid var(--line);color:var(--ink);outline:none;transition:.18s}
+  .ask-input:focus{border-color:var(--broth);background:rgba(201,138,58,.06)}
+  .ask-input::placeholder{color:var(--ink-dim)}
+
+  .log{margin-top:24px;display:flex;flex-direction:column;gap:12px}
+  .qa{border-radius:12px;padding:14px 16px;animation:rise .3s ease}
+  @keyframes rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+  .q{background:rgba(255,255,255,.03);border-left:3px solid var(--ink-dim)}
+  .q .role{font-size:11px;letter-spacing:.3em;color:var(--ink-dim);text-transform:uppercase;margin-bottom:5px}
+  .q .body{font-size:16px;color:#d8d2c4}
+  .a{display:flex;align-items:center;gap:12px;font-size:17px;font-weight:600;padding:12px 16px}
+  .a.yes{background:rgba(90,164,105,.1);border-left:3px solid var(--yes);color:#a8d8b2}
+  .a.no{background:rgba(192,82,74,.1);border-left:3px solid var(--no);color:#e0a09a}
+  .a.maybe{background:rgba(111,125,140,.1);border-left:3px solid var(--maybe);color:#b8c2cc}
+  .a.key{background:rgba(201,138,58,.14);border-left:3px solid var(--broth-glow);color:var(--broth-glow)}
+  .verdict{font-family:var(--display);font-size:22px;min-width:60px}
+
+  .thinking{display:flex;gap:6px;padding:14px 16px}
+  .thinking span{width:8px;height:8px;border-radius:50%;background:var(--broth);animation:blink 1.2s infinite}
+  .thinking span:nth-child(2){animation-delay:.2s}
+  .thinking span:nth-child(3){animation-delay:.4s}
+  @keyframes blink{0%,80%,100%{opacity:.25}40%{opacity:1}}
+
+  .answer-reveal{margin-top:24px;background:linear-gradient(160deg,rgba(201,138,58,.08),rgba(13,17,25,.6));border:1px solid var(--broth);border-radius:16px;padding:26px;display:none;animation:rise .4s ease}
+  .answer-reveal.show{display:block}
+  .answer-reveal .bowl-label{color:var(--broth-glow)}
+  .answer-text{font-size:17px;line-height:1.9;color:#e8e2d4}
+
+  .meta{display:flex;justify-content:space-between;align-items:center;margin-top:18px;font-size:13px;color:var(--ink-dim)}
+  .diff .star{color:var(--broth)}
+
+  footer{text-align:center;margin-top:50px;color:var(--ink-dim);font-size:13px;letter-spacing:.1em}
+  footer a{color:var(--broth);text-decoration:none}
+
+  .empty-hint{color:var(--ink-dim);font-size:14px;text-align:center;padding:20px;font-style:italic}
+  .error-note{color:var(--no);font-size:13px;margin-top:10px;text-align:center}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="backlink" href="/">← 返回大转盘</a>
+
+  <header>
+    <div class="kicker">Lateral · Thinking</div>
+    <h1>超级<span class="accent">海龟汤</span><span class="steam">♨</span></h1>
+    <p class="sub">情境推理 · 你只能问「是非题」，主持人只答 是 / 不是 / 无关</p>
+  </header>
+
+  <details class="config" id="cfgBox">
+    <summary><span>⚙️ AI 设置（首次使用先填这里）</span><span id="cfgSummary" class="cfg-status"></span></summary>
+    <div class="field">
+      <label>qwen2API 地址（含端口，不要结尾斜杠）</label>
+      <input id="cfgBase" placeholder="例如 http://你的服务器IP:7860" autocomplete="off">
+    </div>
+    <div class="field">
+      <label>API Key（qwen2API 后台签发的）</label>
+      <input id="cfgKey" placeholder="例如 sk-xxxxxx" autocomplete="off">
+    </div>
+    <div class="row">
+      <div class="field">
+        <label>模型名</label>
+        <input id="cfgModel" placeholder="qwen3.6-plus">
+      </div>
+      <button class="btn-primary" id="cfgSave" type="button" style="white-space:nowrap">保存设置</button>
+    </div>
+    <div class="cfg-status" id="cfgStatus"></div>
+  </details>
+
+  <section class="bowl" id="soupBowl">
+    <div class="bowl-label">汤 面 · The Surface</div>
+    <div class="puzzle-title" id="puzzleTitle">点击下方按钮，盛一碗汤</div>
+    <div class="puzzle-text" id="puzzleText">海龟汤是一种情境推理游戏。主持人给出一段看似离奇的情境（汤面），你通过不断提出只能用「是 / 不是 / 无关」回答的问题，一步步还原背后的完整真相（汤底）。准备好了吗？</div>
+    <div class="meta">
+      <span class="diff" id="diffBox"></span>
+      <span id="qCount"></span>
+    </div>
+    <div class="controls">
+      <button class="btn-primary" id="newGameBtn">🥣 盛一碗新汤</button>
+      <button class="btn-primary" id="aiGameBtn">🎲 AI 现出一道</button>
+      <button class="btn-ghost" id="hintBtn" disabled>💡 给点提示</button>
+      <button class="btn-ghost" id="revealBtn" disabled>🔑 揭晓汤底</button>
+    </div>
+  </section>
+
+  <section id="playArea" style="display:none">
+    <div class="ask-row">
+      <input class="ask-input" id="askInput" placeholder="提一个是非问题，例如：他死之前认识凶手吗？" autocomplete="off">
+      <button class="btn-primary" id="askBtn">提问</button>
+    </div>
+    <div class="error-note" id="errNote" style="display:none"></div>
+    <div class="log" id="log">
+      <div class="empty-hint">还没有人提问。大胆假设，小心求证。</div>
+    </div>
+  </section>
+
+  <div class="answer-reveal" id="answerReveal">
+    <div class="bowl-label">汤 底 · The Truth</div>
+    <div class="answer-text" id="answerText"></div>
+  </div>
+
+  <footer>
+    超级海龟汤 · 由通义千问（qwen2API）担任主持人 · 真心话大冒险转盘 · 衍生小游戏
+  </footer>
+</div>
+
+<script>
+/* ================= 题库（22 道，离线也能玩；AI 仅判定问答/出题） ================= */
+const PUZZLES = [
+  {title:"海龟汤",surface:"一个男人在海边餐厅点了一碗海龟汤。他尝了一口，付了钱，回到家后却结束了自己的生命。为什么？",truth:"多年前他曾在海上遇难漂流，同伴说煮了「海龟汤」给他充饥，让他活了下来。这次在餐厅尝到真正的海龟汤，味道完全不同——他终于明白当年喝下的根本不是海龟肉，而是已死去的同伴。无法承受真相，他了结了自己。",difficulty:4},
+  {title:"电梯里的男人",surface:"一个住在 20 楼的男人，每天坐电梯下楼上班。回家时若电梯里有别人，他会坐到 20 楼；若只有他一个人，就只坐到 10 楼，再走楼梯上去。为什么？",truth:"他是侏儒，身高很矮，够不到 20 楼的按钮，只能按到 10 楼。有别人在时可以请人帮按 20 楼，独自时只能按到够得着的 10 楼再爬楼梯。",difficulty:2},
+  {title:"半截火柴",surface:"沙漠中发现一具尸体，手里紧紧攥着半截火柴。周围没有任何脚印或车辙。他是怎么死的？",truth:"一群人乘热气球穿越沙漠，气球失去浮力急速下坠。扔光行李仍不够，只能抽火柴决定谁跳下减重。这名男子抽到短火柴，跳下气球身亡。",difficulty:3},
+  {title:"音乐停止时",surface:"音乐一停，她就死了。这是怎么回事？",truth:"她是马戏团走钢丝的盲人表演者，靠背景音乐的节奏判断在钢丝上的位置和何时转身。那天音乐意外中断，她失去唯一的方向参照，从高空坠落身亡。",difficulty:3},
+  {title:"最后一通电话",surface:"一个女人接到一通陌生电话，对方什么也没说就挂断了。她听完后却长舒一口气，露出了笑容。为什么？",truth:"她独居在偏僻处，最近怀疑有人潜入家中。她和朋友约定：若一切安全就在固定时间打来电话、响一声不出声即挂断作为暗号。这通无言电话正是「平安」信号。",difficulty:2},
+  {title:"镜子里的房间",surface:"一个女人住进酒店，半夜醒来打开灯，看了一眼墙上的镜子，立刻收拾行李连夜逃离了酒店。为什么？",truth:"那面「镜子」其实是一块嵌在墙里的单向玻璃，背后是另一个房间。她注意到镜中的自己和镜框之间没有缝隙——正常镜子玻璃面会凹进框里。她意识到有人正在玻璃后窥视，立刻逃离。",difficulty:4},
+  {title:"满地积水",surface:"清晨，人们发现屋里躺着一个人，身旁是一摊水和一根绳子，门窗从内反锁。没有他杀痕迹。发生了什么？",truth:"他站在一块大冰块上，把绳子套在脖子上吊起自己。冰融化后只剩一摊水，制造了「密室」假象。这是一场精心设计的自尽。（提示：水曾经是固体）",difficulty:3},
+  {title:"两碗白饭",surface:"餐厅里，一个男人点了两碗白饭，吃完其中一碗，对另一碗看了很久，然后痛哭起来，报警自首。为什么？",truth:"他曾和兄弟逃难，约定谁找到食物就分一半。哥哥外出找食一去不回，他独自饿了很久。多年后他在这家店尝到一种特别的饭，发现和当年哥哥「带回来的最后一点吃的」味道一样——原来哥哥当年是把自己的肉……他终于明白真相，崩溃自首。",difficulty:5},
+  {title:"画里的破绽",surface:"一位收藏家花重金买下一幅「古画」，回家挂好后端详片刻，立刻打电话报警说自己被骗了。画面没有任何污损。为什么？",truth:"画中描绘的是一个历史人物在用某件物品，而那件物品在该人物所处年代根本还没被发明出来。时代错误的细节暴露了这是赝品。",difficulty:4},
+  {title:"准时的男人",surface:"一个男人每天清晨都精准地在同一时刻醒来，从不用闹钟。某天他照常醒来，却放声大哭。为什么？",truth:"他住在火车轨道旁，每天清晨同一班火车经过的轰鸣声把他唤醒。那天他照常被「火车声」吵醒，却想起这班车昨天已经停运——他听到的声音不该存在，或意味着出了事故，巨大的不祥让他崩溃。",difficulty:4},
+  {title:"沉默的晚餐",surface:"一家人安静地吃晚饭，母亲端上汤，所有人喝了。饭后只有父亲一人还活着，他却没有报警，而是默默收拾了碗筷。为什么？",truth:"这是一场全家约定的共同解脱——他们身患绝症或陷入无法承受的绝境，决定一起离开。父亲是最后执行者，按计划善后，独自承担了一切。（沉重题材，重在推理而非细节）",difficulty:4},
+  {title:"游泳池边",surface:"一个男人被发现死在自家游泳池边，全身湿透，但池里一滴水都没有。怎么回事？",truth:"他在跳水或游泳时，有人趁机抽干了泳池的水，或他是在别处溺水后被移到这里。更经典版本：他患病在浅水训练，泳池水被恶意排空导致他跳下时重伤。关键在于「湿透的人 + 空泳池」的时间差。",difficulty:3},
+  {title:"生日礼物",surface:"小女孩收到生日礼物后大哭不止，父母却露出欣慰的笑。为什么？",truth:"女孩患有重病，长期住院，一直以为自己活不到下一个生日。这份生日礼物意味着她真的活到了今天、并且有了康复的希望。她喜极而泣，父母含泪而笑。",difficulty:2},
+  {title:"倒数第二层",surface:"一栋大楼着火，一个男人从顶层一路往下跑，却在倒数第二层停住，再也不肯往下。消防员赶到时他安然无恙。为什么？",truth:"倒数第二层和一层之间的楼梯在火中坍塌或被烟火封死，继续往下就是死路。他凭经验或亲眼所见判断下面已不可通行，停在最后的安全位置等待救援，因而获救。",difficulty:3},
+  {title:"空白的信",surface:"一个士兵收到一封信，信纸上什么字都没有。他看完后立刻收拾行装、面带微笑地往家赶。为什么？",truth:"他和家人约定：报平安就寄空白信，若家中出事才写字说明。空白意味着「家里一切安好」，且可能暗示战事结束、他可以回家了。",difficulty:3},
+  {title:"医生的迟疑",surface:"急诊室送来一个重伤的男孩，主刀医生看了一眼却说「我不能给他做手术，他是我儿子」。可男孩的父亲此刻正在另一间病房。这怎么可能？",truth:"那位主刀医生是男孩的母亲。人们下意识默认「外科医生是男性」，所以才觉得矛盾。其实毫无矛盾。",difficulty:1},
+  {title:"雪地上的脚印",surface:"清晨，一户人家门前的雪地上，只有一行通向大门的脚印，没有离开的脚印。屋里的主人却不见了。怎么回事？",truth:"那行脚印是「倒着走」留下的——人离开时面朝房子倒退着走，让脚印看起来像是走进屋里。主人其实早已离开，用脚印误导了追踪者。",difficulty:3},
+  {title:"最贵的一餐",surface:"一个富翁在顶级餐厅吃完饭，结账时只付了一块钱，老板不仅没生气，还连声道谢。为什么？",truth:"富翁多年前落魄时曾在这家店白吃过一顿饭，老板没有为难他。如今他功成名就，特意回来，那一块钱是当年的「象征性还款」，而真正的回报是巨额的资助或买下店面相赠。老板感激的是这份不忘恩的情义。",difficulty:3},
+  {title:"会动的稻草人",surface:"农夫每天看到田里的稻草人位置都不一样，但田里从没进过人，也没有大风。为什么？",truth:"那根本不是稻草人，而是有人假扮成稻草人站在田里——可能是躲藏的逃犯、或在监视什么的人。每天位置不同，是因为「它」自己会移动。",difficulty:3},
+  {title:"双胞胎的秘密",surface:"一对双胞胎，哥哥比弟弟大。但在某些年份，弟弟过生日的日期反而排在哥哥前面。为什么？",truth:"哥哥出生在跨日界线或跨年的特殊时刻。例如哥哥出生在 3 月 1 日 0 点前，弟弟稍后出生，但因航行经过国际日期变更线，弟弟的「出生日期」被记为 2 月 28 日，于是日历上弟弟的生日排在前面。",difficulty:4},
+  {title:"不敢开灯",surface:"一个女人独自在家，听到敲门声，透过猫眼看了看就报了警，警察来后在她家附近抓到了一个通缉犯。她是怎么判断的？",truth:"敲门的人自称是查电表/送快递的，但当时是深夜、或停电状态，他却能准确走到她家门口——说明他事先踩过点。又或她从猫眼看到对方手里藏着工具/凶器。细节的不合理让她警觉报警。",difficulty:3},
+  {title:"消失的乘客",surface:"一辆夜班长途车到站后，司机清点人数，发现少了一位上车时明明在的乘客，车门全程没开过。人去哪了？",truth:"那位「乘客」其实在途中已经去世（突发疾病），司机清点时把「还坐着的人」误判为活着；或这是superstition题——上车的是只为还愿/告别而显现的身影，到站即消失。经典推理版取前者：人没消失，只是不再应答。",difficulty:4}
+];
+
+/* ================= 配置（前端直接调 qwen2API） ================= */
+const LS_KEY = 'turtle_soup_cfg';
+let CFG = { base:'', key:'', model:'qwen3.6-plus' };
+
+function loadCfg(){
+  try{
+    const s = localStorage.getItem(LS_KEY);
+    if(s){ const o = JSON.parse(s); CFG = Object.assign(CFG, o); }
+  }catch(e){}
+  $('cfgBase').value = CFG.base || '';
+  $('cfgKey').value = CFG.key || '';
+  $('cfgModel').value = CFG.model || 'qwen3.6-plus';
+  reflectCfg();
+}
+function saveCfg(){
+  CFG.base = $('cfgBase').value.trim().replace(/\/+$/,'');
+  CFG.key = $('cfgKey').value.trim();
+  CFG.model = $('cfgModel').value.trim() || 'qwen3.6-plus';
+  try{ localStorage.setItem(LS_KEY, JSON.stringify(CFG)); }catch(e){}
+  $('cfgStatus').textContent = '✓ 已保存到本浏览器';
+  $('cfgStatus').className = 'cfg-status ok';
+  reflectCfg();
+}
+function cfgReady(){ return CFG.base && CFG.key; }
+function reflectCfg(){
+  if(cfgReady()){
+    $('cfgSummary').textContent = '✓ 已配置';
+    $('cfgSummary').className = 'cfg-status ok';
+  }else{
+    $('cfgSummary').textContent = '未配置';
+    $('cfgSummary').className = 'cfg-status bad';
+    $('cfgBox').open = true;
+  }
+}
+
+/* ================= 状态 ================= */
+let current = null, qCount = 0, aiTitles = [];
+const $ = id => document.getElementById(id);
+
+function pickPuzzle(){
+  let next;
+  do{ next = PUZZLES[Math.floor(Math.random()*PUZZLES.length)]; }
+  while(PUZZLES.length>1 && next===current);
+  return next;
+}
+
+function setPuzzle(p, tag){
+  current = p; qCount = 0;
+  $('puzzleTitle').textContent = p.title + (tag ? ' ' + tag : '');
+  $('puzzleText').textContent = p.surface;
+  $('diffBox').innerHTML = '难度 ' + '<span class="star">★</span>'.repeat(p.difficulty) + '☆'.repeat(5-p.difficulty);
+  $('qCount').textContent = '已提问 0 次';
+  $('playArea').style.display = 'block';
+  $('answerReveal').classList.remove('show');
+  $('hintBtn').disabled = false;
+  $('revealBtn').disabled = false;
+  $('log').innerHTML = '<div class="empty-hint">还没有人提问。大胆假设，小心求证。</div>';
+  $('askInput').value = '';
+  $('errNote').style.display = 'none';
+  $('askInput').focus();
+}
+
+function newGame(){ setPuzzle(pickPuzzle()); }
+
+/* ================= 调 qwen2API（OpenAI 兼容接口） ================= */
+async function callQwen(system, user, maxTokens){
+  if(!cfgReady()){
+    $('cfgBox').open = true;
+    throw new Error('请先在上方「AI 设置」里填写 qwen2API 地址和 Key');
+  }
+  const res = await fetch(CFG.base + '/v1/chat/completions', {
+    method:'POST',
+    headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer ' + CFG.key },
+    body:JSON.stringify({
+      model: CFG.model,
+      stream: false,
+      enable_thinking: false,
+      max_tokens: maxTokens || 200,
+      messages:[
+        { role:'system', content: system },
+        { role:'user', content: user }
+      ]
+    })
+  });
+  if(!res.ok){
+    let t=''; try{ t = await res.text(); }catch(_){}
+    throw new Error('qwen2API ' + res.status + (t ? '：'+t.slice(0,120) : ''));
+  }
+  const data = await res.json();
+  return (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content || '').trim();
+}
+
+/* ---- 判定问答 ---- */
+async function judge(question){
+  const sys = `你是「海龟汤」情境推理游戏的主持人。下面是本局完整真相（汤底），玩家看不到：
+【汤面】${current.surface}
+【汤底】${current.truth}
+玩家会提是非问题。严格根据汤底判断，只输出以下四个英文单词之一，不要任何其他文字：
+YES（与真相相符）/ NO（与真相不符）/ MAYBE（与还原真相无关、不重要或无法用是非回答）/ KEY（玩家已触及或基本说出核心真相）
+只输出 YES / NO / MAYBE / KEY 其中一个单词。`;
+  const raw = (await callQwen(sys, '玩家的问题：' + question, 20)).toUpperCase();
+  if(raw.includes('KEY')) return 'KEY';
+  if(raw.includes('YES')) return 'YES';
+  if(raw.includes('NO')) return 'NO';
+  return 'MAYBE';
+}
+
+/* ---- AI 出题 ---- */
+async function aiGenerate(){
+  const avoidText = aiTitles.length ? `避免与这些已出过的题雷同：${aiTitles.join('、')}。` : '';
+  const sys = `你是海龟汤（情境推理）出题大师。原创一道全新海龟汤谜题：
+1.汤面：简短诡异、引人好奇的情境（2-4句），表面矛盾但隐藏合理真相。
+2.汤底：完整还原真相（3-5句），逻辑自洽，最好有反转。
+3.标题：4-8字。
+4.难度：1到5整数。
+${avoidText}
+只输出一个 JSON 对象，不要 markdown 代码块、不要多余文字，格式严格如下：
+{"title":"标题","surface":"汤面","truth":"汤底","difficulty":3}`;
+  let raw = await callQwen(sys, '出一道新海龟汤，直接返回 JSON。', 800);
+  raw = raw.replace(/```json/gi,'').replace(/```/g,'').trim();
+  const s = raw.indexOf('{'), e = raw.lastIndexOf('}');
+  if(s!==-1 && e!==-1) raw = raw.slice(s, e+1);
+  const obj = JSON.parse(raw);
+  if(!obj.surface || !obj.truth) throw new Error('生成内容缺少汤面或汤底');
+  return {
+    title: String(obj.title || 'AI 现拟谜题').slice(0,20),
+    surface: String(obj.surface),
+    truth: String(obj.truth),
+    difficulty: Math.min(5, Math.max(1, parseInt(obj.difficulty,10) || 3))
+  };
+}
+
+async function aiGame(){
+  const btn = $('aiGameBtn'); const old = btn.textContent;
+  btn.disabled = true; btn.textContent = '🍲 AI 熬汤中…';
+  $('newGameBtn').disabled = true;
+  $('puzzleTitle').textContent = 'AI 正在现拟一道海龟汤…';
+  $('puzzleText').textContent = '稍候片刻，主厨正在熬一锅前所未见的汤。';
+  $('playArea').style.display = 'none';
+  $('answerReveal').classList.remove('show');
+  try{
+    const p = await aiGenerate();
+    aiTitles.push(p.title); if(aiTitles.length>10) aiTitles.shift();
+    setPuzzle(p, '· AI 现拟');
+  }catch(e){
+    $('puzzleTitle').textContent = '出题失败';
+    $('puzzleText').textContent = 'AI 主厨暂时熬不出汤（' + e.message + '）。可以再试一次，或点「盛一碗新汤」用现成题库。';
+  }finally{
+    btn.disabled = false; btn.textContent = old;
+    $('newGameBtn').disabled = false;
+  }
+}
+
+/* ================= 提问交互 ================= */
+function addQ(text){
+  const empty = $('log').querySelector('.empty-hint'); if(empty) empty.remove();
+  const el = document.createElement('div'); el.className = 'qa q';
+  el.innerHTML = '<div class="role">你 问</div><div class="body">' + escapeHtml(text) + '</div>';
+  $('log').appendChild(el); el.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+function addThinking(){
+  const el = document.createElement('div'); el.className='thinking'; el.id='thinkingDots';
+  el.innerHTML='<span></span><span></span><span></span>';
+  $('log').appendChild(el); el.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+function removeThinking(){ const t=$('thinkingDots'); if(t) t.remove(); }
+function addA(verdict){
+  const map={YES:{cls:'yes',mark:'✓',label:'是'},NO:{cls:'no',mark:'✗',label:'不是'},MAYBE:{cls:'maybe',mark:'~',label:'无关 / 不重要'},KEY:{cls:'key',mark:'★',label:'关键！你非常接近真相了'}};
+  const m=map[verdict]||map.MAYBE;
+  const el=document.createElement('div'); el.className='qa a '+m.cls;
+  el.innerHTML='<span class="verdict">'+m.mark+'</span><span>'+m.label+'</span>';
+  $('log').appendChild(el); el.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+function escapeHtml(s){return s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+
+async function ask(){
+  const q = $('askInput').value.trim();
+  if(!q || !current) return;
+  $('errNote').style.display='none'; $('askInput').value='';
+  $('askBtn').disabled=true; $('askInput').disabled=true;
+  addQ(q); addThinking();
+  qCount++; $('qCount').textContent = '已提问 ' + qCount + ' 次';
+  try{
+    const v = await judge(q); removeThinking(); addA(v);
+  }catch(e){
+    removeThinking();
+    $('errNote').textContent = '主持人无法回应（' + e.message + '）';
+    $('errNote').style.display='block';
+  }finally{
+    $('askBtn').disabled=false; $('askInput').disabled=false; $('askInput').focus();
+  }
+}
+
+async function hint(){
+  if(!current) return;
+  $('hintBtn').disabled=true; addQ('（向主持人请求一条提示）'); addThinking();
+  try{
+    const sys = `你是海龟汤主持人。汤面：${current.surface}\n汤底：${current.truth}\n给玩家一条不直接剧透的简短提示（一句话，引导思考方向），用中文。只输出这句提示。`;
+    const tip = await callQwen(sys, '给我一条提示', 120);
+    removeThinking();
+    const el=document.createElement('div'); el.className='qa a maybe';
+    el.innerHTML='<span class="verdict">💡</span><span>'+escapeHtml(tip || '再多问几个问题试试。')+'</span>';
+    $('log').appendChild(el); el.scrollIntoView({behavior:'smooth',block:'nearest'});
+  }catch(e){
+    removeThinking();
+    $('errNote').textContent = '提示失败（' + e.message + '）';
+    $('errNote').style.display='block';
+  }finally{ $('hintBtn').disabled=false; }
+}
+
+function reveal(){
+  if(!current) return;
+  $('answerText').textContent = current.truth;
+  $('answerReveal').classList.add('show');
+  $('answerReveal').scrollIntoView({behavior:'smooth',block:'start'});
+}
+
+/* ================= 绑定 ================= */
+$('cfgSave').addEventListener('click', saveCfg);
+$('newGameBtn').addEventListener('click', newGame);
+$('aiGameBtn').addEventListener('click', aiGame);
+$('askBtn').addEventListener('click', ask);
+$('hintBtn').addEventListener('click', hint);
+$('revealBtn').addEventListener('click', reveal);
+$('askInput').addEventListener('keydown', e=>{ if(e.key==='Enter') ask(); });
+loadCfg();
+</script>
+</body>
+</html>
