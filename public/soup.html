@@ -147,26 +147,6 @@
     </span>
   </div>
 
-  <details class="config" id="cfgBox">
-    <summary><span>⚙️ AI 设置（首次使用先填这里）</span><span id="cfgSummary" class="cfg-status"></span></summary>
-    <div class="field">
-      <label>qwen2API 地址（含端口，不要结尾斜杠）</label>
-      <input id="cfgBase" placeholder="例如 http://你的服务器IP:7860" autocomplete="off">
-    </div>
-    <div class="field">
-      <label>API Key（qwen2API 后台签发的）</label>
-      <input id="cfgKey" placeholder="例如 sk-xxxxxx" autocomplete="off">
-    </div>
-    <div class="row">
-      <div class="field">
-        <label>模型名</label>
-        <input id="cfgModel" placeholder="qwen3.6-plus">
-      </div>
-      <button class="btn-primary" id="cfgSave" type="button" style="white-space:nowrap">保存设置</button>
-    </div>
-    <div class="cfg-status" id="cfgStatus"></div>
-  </details>
-
   <section class="bowl" id="soupBowl">
     <div class="bowl-label">汤 面 · The Surface</div>
     <div class="puzzle-title" id="puzzleTitle">点击下方按钮，盛一碗汤</div>
@@ -231,41 +211,6 @@ const PUZZLES = [
   {title:"消失的乘客",surface:"一辆夜班长途车到站后，司机清点人数，发现少了一位上车时明明在的乘客，车门全程没开过。人去哪了？",truth:"那位「乘客」其实在途中已经去世（突发疾病），司机清点时把「还坐着的人」误判为活着；或这是superstition题——上车的是只为还愿/告别而显现的身影，到站即消失。经典推理版取前者：人没消失，只是不再应答。",difficulty:4}
 ];
 
-/* ================= 配置（前端直接调 qwen2API） ================= */
-const LS_KEY = 'turtle_soup_cfg';
-let CFG = { base:'', key:'', model:'qwen3.6-plus' };
-
-function loadCfg(){
-  try{
-    const s = localStorage.getItem(LS_KEY);
-    if(s){ const o = JSON.parse(s); CFG = Object.assign(CFG, o); }
-  }catch(e){}
-  $('cfgBase').value = CFG.base || '';
-  $('cfgKey').value = CFG.key || '';
-  $('cfgModel').value = CFG.model || 'qwen3.6-plus';
-  reflectCfg();
-}
-function saveCfg(){
-  CFG.base = $('cfgBase').value.trim().replace(/\/+$/,'');
-  CFG.key = $('cfgKey').value.trim();
-  CFG.model = $('cfgModel').value.trim() || 'qwen3.6-plus';
-  try{ localStorage.setItem(LS_KEY, JSON.stringify(CFG)); }catch(e){}
-  $('cfgStatus').textContent = '✓ 已保存到本浏览器';
-  $('cfgStatus').className = 'cfg-status ok';
-  reflectCfg();
-}
-function cfgReady(){ return CFG.base && CFG.key; }
-function reflectCfg(){
-  if(cfgReady()){
-    $('cfgSummary').textContent = '✓ 已配置';
-    $('cfgSummary').className = 'cfg-status ok';
-  }else{
-    $('cfgSummary').textContent = '未配置';
-    $('cfgSummary').className = 'cfg-status bad';
-    $('cfgBox').open = true;
-  }
-}
-
 /* ================= 状态 ================= */
 let current = null, qCount = 0, aiTitles = [];
 const $ = id => document.getElementById(id);
@@ -295,32 +240,20 @@ function setPuzzle(p, tag){
 
 function newGame(){ setPuzzle(pickPuzzle()); }
 
-/* ================= 调 qwen2API（OpenAI 兼容接口） ================= */
+/* ================= 调同源后端代理（后端转发给 qwen2API，免跨域） ================= */
 async function callQwen(system, user, maxTokens){
-  if(!cfgReady()){
-    $('cfgBox').open = true;
-    throw new Error('请先在上方「AI 设置」里填写 qwen2API 地址和 Key');
-  }
-  const res = await fetch(CFG.base + '/v1/chat/completions', {
+  const res = await fetch('/api/soup-chat', {
     method:'POST',
-    headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer ' + CFG.key },
-    body:JSON.stringify({
-      model: CFG.model,
-      stream: false,
-      enable_thinking: false,
-      max_tokens: maxTokens || 200,
-      messages:[
-        { role:'system', content: system },
-        { role:'user', content: user }
-      ]
-    })
+    headers:{ 'Content-Type':'application/json' },
+    body:JSON.stringify({ system, user, maxTokens: maxTokens || 200 })
   });
-  if(!res.ok){
-    let t=''; try{ t = await res.text(); }catch(_){}
-    throw new Error('qwen2API ' + res.status + (t ? '：'+t.slice(0,120) : ''));
+  let data = null;
+  try{ data = await res.json(); }catch(_){}
+  if(!res.ok || !data || !data.ok){
+    const msg = (data && data.message) ? data.message : ('HTTP ' + res.status);
+    throw new Error(msg);
   }
-  const data = await res.json();
-  return (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content || '').trim();
+  return (data.text || '').trim();
 }
 
 /* ---- 判定问答 ---- */
@@ -449,14 +382,12 @@ function reveal(){
 }
 
 /* ================= 绑定 ================= */
-$('cfgSave').addEventListener('click', saveCfg);
 $('newGameBtn').addEventListener('click', newGame);
 $('aiGameBtn').addEventListener('click', aiGame);
 $('askBtn').addEventListener('click', ask);
 $('hintBtn').addEventListener('click', hint);
 $('revealBtn').addEventListener('click', reveal);
 $('askInput').addEventListener('keydown', e=>{ if(e.key==='Enter') ask(); });
-loadCfg();
 </script>
 </body>
 </html>

@@ -1,4 +1,5 @@
 const http = require('http');
+const https = require('https');
 const fs = require('fs');
 const path = require('path');
 
@@ -7,6 +8,62 @@ const PUBLIC_DIR = path.join(__dirname, 'public');
 const DATA_DIR = path.join(__dirname, 'data');
 const DATA_FILE = path.join(DATA_DIR, 'wheel-data.json');
 const ADMIN_AUTH_HEADER = 'x-admin-auth';
+
+// ===== 海龟汤 AI 主持人:转发到 qwen2API(同源代理,免跨域)=====
+// 优先读环境变量,没有则用默认值。生产建议在 ecosystem.config.js 的 env 里设。
+const QWEN_BASE = process.env.QWEN_BASE || 'http://127.0.0.1:7860';
+const QWEN_KEY = process.env.QWEN_KEY || '';   // qwen2API 后台签发的 API Key
+const QWEN_MODEL = process.env.QWEN_MODEL || 'qwen3.6-plus';
+
+// 转发一次 chat 请求到 qwen2API,返回 assistant 文本
+function qwenChat(system, user, maxTokens) {
+  return new Promise((resolve, reject) => {
+    const payload = JSON.stringify({
+      model: QWEN_MODEL,
+      stream: false,
+      enable_thinking: false,
+      max_tokens: maxTokens || 200,
+      messages: [
+        { role: 'system', content: String(system || '') },
+        { role: 'user', content: String(user || '') }
+      ]
+    });
+    let u;
+    try { u = new URL(QWEN_BASE + '/v1/chat/completions'); }
+    catch (e) { return reject(new Error('QWEN_BASE 配置错误')); }
+    const lib = u.protocol === 'https:' ? https : http;
+    const opt = {
+      method: 'POST',
+      hostname: u.hostname,
+      port: u.port || (u.protocol === 'https:' ? 443 : 80),
+      path: u.pathname,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + QWEN_KEY,
+        'Content-Length': Buffer.byteLength(payload)
+      },
+      timeout: 60000
+    };
+    const r = lib.request(opt, resp => {
+      let body = '';
+      resp.on('data', c => body += c);
+      resp.on('end', () => {
+        if (resp.statusCode < 200 || resp.statusCode >= 300) {
+          return reject(new Error('qwen2API ' + resp.statusCode + '：' + body.slice(0, 160)));
+        }
+        try {
+          const data = JSON.parse(body);
+          const text = data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content || '';
+          resolve(String(text).trim());
+        } catch (e) { reject(new Error('解析 qwen2API 响应失败')); }
+      });
+    });
+    r.on('timeout', () => { r.destroy(); reject(new Error('qwen2API 响应超时')); });
+    r.on('error', e => reject(new Error('连接 qwen2API 失败：' + e.message)));
+    r.write(payload);
+    r.end();
+  });
+}
 
 // ===== 获取客户端真实 IP =====
 // 按优先级:X-Forwarded-For 首段 → X-Real-IP → socket.remoteAddress
@@ -735,6 +792,25 @@ const server = http.createServer(async (req, res) => {
   try {
     const pathname = (req.url || '/').split('?')[0];
     const clientIp = getClientIp(req);
+
+    // ===== 海龟汤 AI 主持人(同源代理到 qwen2API)=====
+    if (pathname === '/api/soup-chat' && req.method === 'POST') {
+      if (!QWEN_KEY) {
+        return sendJson(res, 503, { ok: false, message: '服务端未配置 QWEN_KEY' });
+      }
+      const raw = await readBody(req);
+      let p;
+      try { p = JSON.parse(raw || '{}'); } catch (e) { return sendJson(res, 400, { ok: false, message: '请求格式错误' }); }
+      if (!p.system || !p.user) {
+        return sendJson(res, 400, { ok: false, message: '缺少 system 或 user' });
+      }
+      try {
+        const text = await qwenChat(p.system, p.user, Number(p.maxTokens) || 200);
+        return sendJson(res, 200, { ok: true, text });
+      } catch (e) {
+        return sendJson(res, 502, { ok: false, message: e.message });
+      }
+    }
 
     // ===== 公共数据读取(剥离 adminPassword + spinByIp,注入当前 IP 的 spinCount)=====
     if (pathname === '/api/data' && req.method === 'GET') {
